@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Book, GraphData, Relationship, RelationshipType } from './types';
 import { loadGraph, saveGraph } from './lib/storage';
 import { dedupeRelationships, detectRelationships } from './lib/relationships';
@@ -7,6 +7,7 @@ import { BookSearch } from './components/BookSearch';
 import { BookSidebar } from './components/BookSidebar';
 import { RelationshipFilter } from './components/RelationshipFilter';
 import { searchBooksGoogle } from './lib/googleBooks';
+import { parseBooklogCSV } from './lib/booklog';
 import { searchBooksNDL } from './lib/ndl';
 import { getBooksByAuthorNDL, getBooksBySubjectNDL } from './lib/ndl';
 import { getBooksByAuthor, getBooksBySubject } from './lib/openLibrary';
@@ -98,6 +99,8 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [addingRecId, setAddingRecId] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState('');
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   function updateGraph(fn: (prev: GraphData) => GraphData) {
     setGraph((prev) => {
@@ -168,6 +171,36 @@ export default function App() {
     } finally {
       setAddingRecId(null);
     }
+  }
+
+  async function handleCSVImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const text = await file.text();
+    const books = parseBooklogCSV(text);
+    if (books.length === 0) {
+      setImportMessage('本が見つかりませんでした');
+      return;
+    }
+    updateGraph((prev) => {
+      const existingIds = new Set(prev.books.map((b) => b.id));
+      let next = prev;
+      let added = 0;
+      for (const book of books) {
+        if (existingIds.has(book.id)) continue;
+        const newRels = detectRelationships(next.books, book, enabledTypes);
+        next = {
+          books: [...next.books, book],
+          relationships: dedupeRelationships([...next.relationships, ...newRels]),
+        };
+        existingIds.add(book.id);
+        added++;
+      }
+      setImportMessage(`${added}冊追加しました`);
+      return next;
+    });
+    setTimeout(() => setImportMessage(''), 3000);
   }
 
   function toggleRead(id: string) {
@@ -277,6 +310,17 @@ export default function App() {
         <button className="btn-primary" onClick={() => setShowSearch((value) => !value)}>
           {showSearch ? TEXT.close : TEXT.addBook}
         </button>
+        <button className="btn-csv" onClick={() => csvInputRef.current?.click()}>
+          ブクログCSV
+        </button>
+        <input
+          ref={csvInputRef}
+          type="file"
+          accept=".csv"
+          style={{ display: 'none' }}
+          onChange={handleCSVImport}
+        />
+        {importMessage && <span className="import-message">{importMessage}</span>}
         {graph.books.length > 0 && (
           <span className="header-count">
             {graph.books.length}{TEXT.books} / {graph.relationships.length}{TEXT.relationships}
