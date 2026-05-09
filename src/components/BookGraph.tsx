@@ -148,8 +148,10 @@ export function BookGraph({
   const handleResetZoom = useCallback(() => {
     const cy = cyRef.current;
     if (!cy) return;
-    cy.zoom(1);
-    cy.center();
+    const nodes = cy.nodes('.book-node, .author-group');
+    if (nodes.length > 0) cy.fit(nodes, 48);
+    else cy.fit();
+    setZoom(cy.zoom());
   }, []);
 
   useEffect(() => {
@@ -481,9 +483,7 @@ export function BookGraph({
     const node = cy.getElementById(bookId);
     if (!node.length) return;
 
-    cy.zoom(1);
-    cy.center(node);
-    setZoom(1);
+    cy.animate({ center: { eles: node }, duration: 300, easing: 'ease-in-out-cubic' });
   }, [focusRequest]);
 
   return (
