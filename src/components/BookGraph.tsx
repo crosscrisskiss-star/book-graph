@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import cytoscape from 'cytoscape';
 // @ts-expect-error no types bundled
 import cola from 'cytoscape-cola';
@@ -100,11 +100,11 @@ function syncPhantom(cy: cytoscape.Core, bookId: string) {
 
 const BOOK_NODE_SELECTOR = ':not(.author-phantom):not(.author-group)';
 
-function runLayout(cy: cytoscape.Core, duration = 1500) {
+function runLayout(cy: cytoscape.Core, duration = 1500, randomize = false) {
   cy.elements(`node${BOOK_NODE_SELECTOR}, node.author-group, edge:not(.hidden)`).layout({
     name: 'cola',
     animate: true,
-    randomize: false,
+    randomize,
     maxSimulationTime: duration,
   } as Parameters<typeof cy.layout>[0]).run();
 }
@@ -114,6 +114,14 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
   const cyRef = useRef<cytoscape.Core | null>(null);
   const groupByAuthorRef = useRef(groupByAuthor);
   useEffect(() => { groupByAuthorRef.current = groupByAuthor; }, [groupByAuthor]);
+  const [zoom, setZoom] = useState(1);
+
+  const handleResetZoom = useCallback(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.zoom(1);
+    cy.center();
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -230,6 +238,8 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
       ],
       layout: { name: 'grid' },
     });
+
+    cy.on('zoom', () => setZoom(cy.zoom()));
 
     cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (e) => {
       onSelectBook(e.target.id());
@@ -399,7 +409,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
       cy.nodes('.author-phantom').removeClass('phantom-hidden');
     }
 
-    if (cy.nodes(BOOK_NODE_SELECTOR).length > 0) runLayout(cy, 2000);
+    if (cy.nodes(BOOK_NODE_SELECTOR).length > 0) runLayout(cy, 2000, groupByAuthor);
   }, [groupByAuthor, data.books]);
 
   // Re-layout triggered by layoutKey
@@ -417,5 +427,13 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
     if (selectedId) cy.getElementById(selectedId).addClass('highlighted');
   }, [selectedId]);
 
-  return <div ref={containerRef} className="graph-canvas" />;
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <div className="zoom-overlay">
+        <span className="zoom-pct">{Math.round(zoom * 100)}%</span>
+        <button className="zoom-reset-btn" onClick={handleResetZoom} title="100%に戻す">⌂</button>
+      </div>
+    </div>
+  );
 }

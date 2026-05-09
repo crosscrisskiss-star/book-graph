@@ -234,6 +234,38 @@ body {
 /* Graph */
 .graph-container { flex: 1; position: relative; }
 .graph-canvas { width: 100%; height: 100%; }
+
+.zoom-overlay {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 4px 10px;
+  z-index: 10;
+  pointer-events: auto;
+}
+.zoom-pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94A3B8;
+  min-width: 36px;
+  text-align: right;
+}
+.zoom-reset-btn {
+  background: none;
+  border: none;
+  color: #64748B;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+.zoom-reset-btn:hover { color: #F1F5F9; }
 .empty-state {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
