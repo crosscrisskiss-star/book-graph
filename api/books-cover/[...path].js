@@ -21,9 +21,7 @@ export default async function handler(request) {
 
     const ct = upstream.headers.get('content-type') ?? '';
     if (!upstream.ok || !ct.startsWith('image/')) {
-      return new Response(FALLBACK_SVG, {
-        headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=3600' },
-      });
+      return new Response(null, { status: 404 });
     }
 
     const headers = new Headers({ 'Cache-Control': 'public, max-age=86400', 'content-type': ct });

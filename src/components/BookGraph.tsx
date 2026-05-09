@@ -217,6 +217,8 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
     const cy = cyRef.current;
     if (!cy) return;
 
+    let cancelled = false;
+
     const existingNodeIds = new Set(cy.nodes(':not(.author-phantom)').map((n) => n.id()));
     const newBookIds = new Set(data.books.map((b) => b.id));
 
@@ -228,24 +230,44 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
       }
     });
 
+    function asyncLoadCover(bookId: string, proxyUrl: string, fallback: string) {
+      const cyInst = cy!;
+      const img = new window.Image();
+      img.onload = () => {
+        if (cancelled) return;
+        const node = cyInst.getElementById(bookId);
+        if (node.length) node.data('cover', proxyUrl);
+      };
+      img.onerror = () => {
+        if (cancelled) return;
+        const node = cyInst.getElementById(bookId);
+        if (node.length) node.data('cover', fallback);
+      };
+      img.src = proxyUrl;
+    }
+
     // Add/update nodes
     const added: cytoscape.ElementDefinition[] = [];
     for (const book of data.books) {
-      const cover = coverForBook(book);
+      const generated = generatedCoverForBook(book);
+      const proxyUrl = coverForBook(book);
+      const isDataUri = proxyUrl.startsWith('data:');
+
       if (existingNodeIds.has(book.id)) {
         const node = cy.getElementById(book.id);
         node.data('label', nodeTitle(book.title));
         node.data('read', book.read ?? false);
-        node.data('cover', cover);
         cy.getElementById(phantomId(book.id)).data('label', nodeAuthor(book.authors?.[0]));
+        if (!isDataUri) asyncLoadCover(book.id, proxyUrl, generated);
       } else {
         added.push({
-          data: { id: book.id, label: nodeTitle(book.title), read: book.read ?? false, cover },
+          data: { id: book.id, label: nodeTitle(book.title), read: book.read ?? false, cover: generated },
         });
         added.push({
           data: { id: phantomId(book.id), label: nodeAuthor(book.authors?.[0]) },
           classes: 'author-phantom',
         });
+        if (!isDataUri) asyncLoadCover(book.id, proxyUrl, generated);
       }
     }
 
@@ -258,6 +280,8 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
         maxSimulationTime: 1500,
       } as Parameters<typeof cy.layout>[0]).run();
     }
+
+    return () => { cancelled = true; };
   }, [data.books]);
 
   // Sync edges
