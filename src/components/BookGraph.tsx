@@ -108,6 +108,10 @@ function runLayout(cy: cytoscape.Core, duration = 1700, randomize = false) {
     unconstrIter: 30,
     userConstIter: 35,
     allConstIter: 35,
+    stop: () => {
+      const nodes = cy.nodes('.book-node').add(cy.nodes('.author-group'));
+      if (nodes.length > 0) cy.fit(nodes, 48);
+    },
   } as Parameters<typeof cy.layout>[0]).run();
 }
 
@@ -356,6 +360,8 @@ export function BookGraph({
 
     const groupByAuthorChanged = prevGroupByAuthorRef.current !== groupByAuthor;
     prevGroupByAuthorRef.current = groupByAuthor;
+
+    if (!groupByAuthor && !groupByAuthorChanged) return;
 
     cy.nodes(BOOK_NODE_SELECTOR).move({ parent: null });
     cy.nodes('.author-group').remove();
