@@ -5,10 +5,18 @@ import { getBooksByAuthor, getBooksBySubject } from '../lib/openLibrary';
 import { getBooksByAuthorNDL, getBooksBySubjectNDL } from '../lib/ndl';
 import { LibraryPanel } from './LibraryPanel';
 
+function amazonUrl(book: Book): string {
+  const isbn = book.isbn?.replace(/[-\s]/g, '');
+  if (isbn) return `https://www.amazon.co.jp/s?k=${isbn}&i=stripbooks`;
+  const q = [book.title, book.authors?.[0]].filter(Boolean).join(' ');
+  return `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`;
+}
+
 const TEXT = {
   close: '\u00d7',
   year: '\u5e74',
   series: '\u30b7\u30ea\u30fc\u30ba',
+  amazon: 'Amazon\u3067\u8cb7\u3046',
   borrow: '\u56f3\u66f8\u9928\u3067\u501f\u308a\u308b',
   deleteBook: '\u3053\u306e\u672c\u3092\u524a\u9664',
   expandSection: '\u95a2\u4fc2\u6027\u3092\u5c55\u958b',
@@ -193,6 +201,9 @@ export function BookSidebar({
       >
         {book.read ? '✓ 既読' : '○ 未読'}
       </button>
+      <a className="btn-amazon" href={amazonUrl(book)} target="_blank" rel="noopener noreferrer">
+        {TEXT.amazon}
+      </a>
       <button className="btn-library" onClick={() => setShowLibrary(true)}>
         {TEXT.borrow}
       </button>

@@ -12,7 +12,6 @@ interface Props {
   enabledTypes: Set<RelationshipType>;
   selectedId: string | null;
   onSelectBook: (id: string) => void;
-  onNodeMenu: (id: string, x: number, y: number) => void;
   layoutKey: number;
 }
 
@@ -32,23 +31,28 @@ function coverForBook(book: Book): string {
   if (book.coverUrl?.startsWith('https://ndlsearch.ndl.go.jp/thumbnail/')) {
     return book.coverUrl.replace('https://ndlsearch.ndl.go.jp/thumbnail', '/api/ndl-thumbnail');
   }
-  // Already a relative/proxy URL or data URI
   if (book.coverUrl) return book.coverUrl;
-  // Fallback: books.or.jp by ISBN (edge fn returns SVG placeholder on 404)
   const isbn = book.isbn?.replace(/[-\s]/g, '');
   return isbn ? `/api/books-cover/${isbn}.jpg` : generatedCoverForBook(book);
 }
 
 function generatedCoverForBook(book: Book): string {
   const t = book.title;
-  const line1 = t.slice(0, 7);
-  const line2 = t.length > 7 ? t.slice(7, 13) + (t.length > 13 ? '…' : '') : '';
-  const y1 = line2 ? 38 : 48;
+  const lines: string[] = [];
+  for (let i = 0; i < t.length && lines.length < 3; i += 6) {
+    const chunk = t.slice(i, i + 6);
+    lines.push(i + 6 < t.length && lines.length === 2 ? chunk.slice(0, 5) + '…' : chunk);
+  }
+  const lineH = 16;
+  const totalH = lines.length * lineH;
+  const startY = (96 - totalH) / 2 + 8;
+  const textEls = lines
+    .map((l, i) => `<text x="34" y="${startY + i * lineH}" fill="#f8fafc" font-family="sans-serif" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">${escapeXml(l)}</text>`)
+    .join('');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="68" height="96" viewBox="0 0 68 96">
     <rect width="68" height="96" rx="4" fill="#1e3a5f"/>
-    <rect x="2" y="2" width="64" height="92" rx="3" fill="none" stroke="#60a5fa" stroke-width="1" opacity=".6"/>
-    <text x="34" y="${y1}" fill="#f8fafc" font-family="sans-serif" font-size="9" font-weight="700" text-anchor="middle" dominant-baseline="middle">${escapeXml(line1)}</text>
-    ${line2 ? `<text x="34" y="${y1 + 14}" fill="#f8fafc" font-family="sans-serif" font-size="9" font-weight="700" text-anchor="middle" dominant-baseline="middle">${escapeXml(line2)}</text>` : ''}
+    <rect x="2" y="2" width="64" height="92" rx="3" fill="none" stroke="#60a5fa" stroke-width="1" opacity=".5"/>
+    ${textEls}
   </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
@@ -61,14 +65,32 @@ function escapeXml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function nodeLabel(title: string, author?: string): string {
-  const t = title.length > 16 ? `${title.slice(0, 14)}…` : title;
-  if (!author) return t;
-  const a = author.length > 14 ? `${author.slice(0, 12)}…` : author;
-  return `${t}\n${a}`;
+function nodeTitle(title?: string): string {
+  if (!title) return '';
+  return title.length > 14 ? `${title.slice(0, 12)}…` : title;
 }
 
-export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNodeMenu, layoutKey }: Props) {
+function nodeAuthor(author?: string): string {
+  if (!author) return '';
+  return author.length > 14 ? `${author.slice(0, 12)}…` : author;
+}
+
+function phantomId(bookId: string): string {
+  return `${bookId}::a`;
+}
+
+const PHANTOM_Y = 58;
+
+function syncPhantom(cy: cytoscape.Core, bookId: string) {
+  const main = cy.getElementById(bookId);
+  const phantom = cy.getElementById(phantomId(bookId));
+  if (main.length && phantom.length) {
+    const pos = main.position();
+    phantom.position({ x: pos.x, y: pos.y + PHANTOM_Y });
+  }
+}
+
+export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layoutKey }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
@@ -96,6 +118,23 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
             height: 96,
             shape: 'round-rectangle',
             'background-opacity': 1,
+          },
+        },
+        {
+          selector: 'node.author-phantom',
+          style: {
+            'background-opacity': 0,
+            'border-width': 0,
+            width: 1,
+            height: 1,
+            label: 'data(label)',
+            color: '#94A3B8',
+            'font-size': 10,
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '90px',
+            events: 'no',
           },
         },
         {
@@ -154,11 +193,16 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
       layout: { name: 'grid' },
     });
 
-    cy.on('tap', 'node', (e) => {
-      const id = e.target.id();
-      const pos = e.target.renderedPosition();
-      onSelectBook(id);
-      onNodeMenu(id, pos.x, pos.y);
+    cy.on('tap', 'node:not(.author-phantom)', (e) => {
+      onSelectBook(e.target.id());
+    });
+
+    cy.on('layoutstop', () => {
+      cy.nodes(':not(.author-phantom)').forEach((n) => syncPhantom(cy, n.id()));
+    });
+
+    cy.on('drag', 'node:not(.author-phantom)', (e) => {
+      syncPhantom(cy, e.target.id());
     });
 
     cyRef.current = cy;
@@ -173,38 +217,41 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
     const cy = cyRef.current;
     if (!cy) return;
 
-    const existingNodeIds = new Set(cy.nodes().map((n) => n.id()));
+    const existingNodeIds = new Set(cy.nodes(':not(.author-phantom)').map((n) => n.id()));
     const newBookIds = new Set(data.books.map((b) => b.id));
 
-    // Remove deleted nodes
-    cy.nodes().forEach((n) => {
-      if (!newBookIds.has(n.id())) n.remove();
+    // Remove deleted nodes + their phantoms
+    cy.nodes(':not(.author-phantom)').forEach((n) => {
+      if (!newBookIds.has(n.id())) {
+        cy.getElementById(phantomId(n.id())).remove();
+        n.remove();
+      }
     });
 
-    // Add new nodes
+    // Add/update nodes
     const added: cytoscape.ElementDefinition[] = [];
     for (const book of data.books) {
       const cover = coverForBook(book);
       if (existingNodeIds.has(book.id)) {
         const node = cy.getElementById(book.id);
-        node.data('label', nodeLabel(book.title, book.authors?.[0]));
+        node.data('label', nodeTitle(book.title));
         node.data('read', book.read ?? false);
         node.data('cover', cover);
+        cy.getElementById(phantomId(book.id)).data('label', nodeAuthor(book.authors?.[0]));
       } else {
         added.push({
-          data: {
-            id: book.id,
-            label: nodeLabel(book.title, book.authors?.[0]),
-            read: book.read ?? false,
-            cover,
-          },
+          data: { id: book.id, label: nodeTitle(book.title), read: book.read ?? false, cover },
+        });
+        added.push({
+          data: { id: phantomId(book.id), label: nodeAuthor(book.authors?.[0]) },
+          classes: 'author-phantom',
         });
       }
     }
 
     if (added.length > 0) {
       cy.add(added);
-      cy.layout({
+      cy.elements('node:not(.author-phantom), edge:not(.hidden)').layout({
         name: 'cola',
         animate: true,
         randomize: false,
@@ -221,12 +268,10 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
     const existingEdgeIds = new Set(cy.edges().map((e) => e.id()));
     const newRelIds = new Set(data.relationships.map((r) => r.id));
 
-    // Remove deleted edges
     cy.edges().forEach((e) => {
       if (!newRelIds.has(e.id())) e.remove();
     });
 
-    // Add new edges, respecting filter
     for (const rel of data.relationships) {
       if (!existingEdgeIds.has(rel.id)) {
         if (!cy.getElementById(rel.source).length || !cy.getElementById(rel.target).length) continue;
@@ -242,7 +287,6 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
       }
     }
 
-    // Toggle visibility based on enabled types
     cy.edges().forEach((e) => {
       const relType = data.relationships.find((r) => r.id === e.id())?.type;
       if (relType && !enabledTypes.has(relType)) {
@@ -256,8 +300,8 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
   // Re-layout triggered by layoutKey
   useEffect(() => {
     const cy = cyRef.current;
-    if (!cy || cy.nodes().length === 0 || layoutKey === 0) return;
-    cy.elements('node, edge:not(.hidden)').layout({
+    if (!cy || cy.nodes(':not(.author-phantom)').length === 0 || layoutKey === 0) return;
+    cy.elements('node:not(.author-phantom), edge:not(.hidden)').layout({
       name: 'cola',
       animate: true,
       randomize: false,
@@ -269,7 +313,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
-    cy.nodes().removeClass('highlighted');
+    cy.nodes(':not(.author-phantom)').removeClass('highlighted');
     if (selectedId) {
       cy.getElementById(selectedId).addClass('highlighted');
     }

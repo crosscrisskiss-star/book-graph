@@ -23,7 +23,7 @@ interface Props {
 
 async function searchJapaneseBooks(query: string): Promise<Book[]> {
   const [googleBooks, ndlBooks] = await Promise.all([
-    searchBooksGoogle(query, 10),
+    searchBooksGoogle(query, 20),
     searchBooksNDL(query),
   ]);
 

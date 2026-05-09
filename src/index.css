@@ -538,10 +538,28 @@ body {
 }
 .btn-read-toggle.read:hover { background: #064923; }
 
+.btn-amazon {
+  display: block;
+  width: 100%;
+  margin: 10px 0 4px;
+  padding: 8px;
+  background: #FF9900;
+  border: none;
+  border-radius: 6px;
+  color: #111;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+.btn-amazon:hover { background: #e68a00; }
+
 .btn-library {
   display: block;
   width: 100%;
-  margin: 10px 0 6px;
+  margin: 4px 0 6px;
   padding: 8px;
   background: #064e3b;
   border: 1px solid #059669;

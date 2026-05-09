@@ -112,13 +112,11 @@ function dedupeBooks(books: Book[]): Book[] {
 }
 
 export async function searchBooksNDL(query: string): Promise<Book[]> {
-  const byTitle = await ndlSearch({ title: query }, 20);
-  if (byTitle.length > 0) return dedupeBooks(byTitle);
-
-  const byAny = await ndlSearch({ any: query }, 20);
-  if (byAny.length > 0) return dedupeBooks(byAny);
-
-  return dedupeBooks(await ndlSearch({ creator: query }, 20));
+  const [byTitle, byCreator] = await Promise.all([
+    ndlSearch({ title: query }, 30),
+    ndlSearch({ creator: query }, 20),
+  ]);
+  return dedupeBooks([...byTitle, ...byCreator]);
 }
 
 export function getBooksByAuthorNDL(author: string): Promise<Book[]> {
