@@ -102,6 +102,7 @@ export default function App() {
   const [importMessage, setImportMessage] = useState('');
   const [nodeMenu, setNodeMenu] = useState<{ bookId: string; x: number; y: number } | null>(null);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
+  const [layoutKey, setLayoutKey] = useState(0);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   function updateGraph(fn: (prev: GraphData) => GraphData) {
@@ -313,6 +314,11 @@ export default function App() {
         <button className="btn-primary" onClick={() => setShowSearch((value) => !value)}>
           {showSearch ? TEXT.close : TEXT.addBook}
         </button>
+        {graph.books.length > 0 && (
+          <button className="btn-relayout" onClick={() => setLayoutKey((k) => k + 1)}>
+            再配置
+          </button>
+        )}
         <button className="btn-csv" onClick={() => csvInputRef.current?.click()}>
           ブクログCSV
         </button>
@@ -374,6 +380,7 @@ export default function App() {
               selectedId={selectedId}
               onSelectBook={setSelectedId}
               onNodeMenu={(id, x, y) => setNodeMenu({ bookId: id, x, y })}
+              layoutKey={layoutKey}
             />
           )}
           {nodeMenu && menuBook && (

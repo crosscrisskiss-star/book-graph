@@ -13,6 +13,7 @@ interface Props {
   selectedId: string | null;
   onSelectBook: (id: string) => void;
   onNodeMenu: (id: string, x: number, y: number) => void;
+  layoutKey: number;
 }
 
 function coverForBook(book: Book): string | undefined {
@@ -69,7 +70,7 @@ function nodeLabel(title: string, author?: string): string {
   return `${t}\n${a}`;
 }
 
-export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNodeMenu }: Props) {
+export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNodeMenu, layoutKey }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
@@ -254,6 +255,18 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
       }
     });
   }, [data.relationships, enabledTypes]);
+
+  // Re-layout triggered by layoutKey
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || cy.nodes().length === 0 || layoutKey === 0) return;
+    cy.elements('node, edge:not(.hidden)').layout({
+      name: 'cola',
+      animate: true,
+      randomize: false,
+      maxSimulationTime: 2500,
+    } as Parameters<typeof cy.layout>[0]).run();
+  }, [layoutKey]);
 
   // Highlight selected
   useEffect(() => {
