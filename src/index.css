@@ -556,6 +556,24 @@ body {
 }
 .btn-amazon:hover { background: #e68a00; }
 
+.btn-ku {
+  display: block;
+  width: 100%;
+  margin: 4px 0 4px;
+  padding: 8px;
+  background: #1a1a2e;
+  border: 1px solid #6366f1;
+  border-radius: 6px;
+  color: #a5b4fc;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+.btn-ku:hover { background: #16213e; color: #c7d2fe; }
+
 .btn-library {
   display: block;
   width: 100%;

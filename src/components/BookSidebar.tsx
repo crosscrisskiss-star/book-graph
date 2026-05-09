@@ -12,11 +12,18 @@ function amazonUrl(book: Book): string {
   return `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`;
 }
 
+function kindleUnlimitedUrl(book: Book): string {
+  const isbn = book.isbn?.replace(/[-\s]/g, '');
+  const q = isbn ?? [book.title, book.authors?.[0]].filter(Boolean).join(' ');
+  return `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=digital-text&rh=p_n_unlimited_availability%3A914982011`;
+}
+
 const TEXT = {
   close: '\u00d7',
   year: '\u5e74',
   series: '\u30b7\u30ea\u30fc\u30ba',
   amazon: 'Amazon\u3067\u8cb7\u3046',
+  kindleUnlimited: 'Kindle Unlimited \u3092\u78ba\u8a8d',
   borrow: '\u56f3\u66f8\u9928\u3067\u501f\u308a\u308b',
   deleteBook: '\u3053\u306e\u672c\u3092\u524a\u9664',
   expandSection: '\u95a2\u4fc2\u6027\u3092\u5c55\u958b',
@@ -203,6 +210,9 @@ export function BookSidebar({
       </button>
       <a className="btn-amazon" href={amazonUrl(book)} target="_blank" rel="noopener noreferrer">
         {TEXT.amazon}
+      </a>
+      <a className="btn-ku" href={kindleUnlimitedUrl(book)} target="_blank" rel="noopener noreferrer">
+        {TEXT.kindleUnlimited}
       </a>
       <button className="btn-library" onClick={() => setShowLibrary(true)}>
         {TEXT.borrow}
