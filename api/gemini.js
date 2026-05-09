@@ -54,7 +54,9 @@ ${subjectLine}
     return json(res, 503, { error: `Gemini auth failed: ${detail}` });
   }
 
-  const PREFER = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+  // Free-tier friendly models first
+  const PREFER = ['gemini-1.5-flash-8b', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-pro'];
+
   const available = (listData.models ?? [])
     .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
     .map((m) => m.name.replace('models/', ''));
@@ -63,44 +65,56 @@ ${subjectLine}
     return json(res, 503, { error: 'Gemini: generateContent に対応したモデルがありません' });
   }
 
-  // Pick the most preferred model that is available
-  const model =
-    PREFER.find((p) => available.some((a) => a === p || a.startsWith(p + '-'))) ??
-    available[0];
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json' },
-        }),
-      }
-    );
-
-    const data = await response.json();
-    if (!response.ok) {
-      const detail = data?.error?.message ?? JSON.stringify(data);
-      return json(res, response.status, { error: `Gemini (${model}): ${detail}` });
-    }
-
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    const cleaned = text.replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim();
-    const match = cleaned.match(/\[[\s\S]*\]/);
-    if (!match) {
-      return json(res, 500, { error: `Gemini returned no JSON array. model=${model} available=[${available.slice(0,5).join(',')}]` });
-    }
-
-    const recommendations = JSON.parse(match[0]);
-    if (!Array.isArray(recommendations)) {
-      return json(res, 500, { error: 'unexpected Gemini response format' });
-    }
-
-    return json(res, 200, recommendations.slice(0, 2));
-  } catch (error) {
-    return json(res, 500, { error: error instanceof Error ? error.message : String(error) });
+  // Build ordered list: preferred matches first, then remaining
+  const ordered = [];
+  const seen = new Set();
+  for (const prefix of PREFER) {
+    const match = available.find((a) => a === prefix || a.startsWith(`${prefix}-`));
+    if (match && !seen.has(match)) { ordered.push(match); seen.add(match); }
   }
+  for (const m of available) {
+    if (!seen.has(m)) ordered.push(m);
+  }
+
+  let lastError = `no models tried (available: ${available.slice(0, 5).join(', ')})`;
+
+  for (const model of ordered) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json' },
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        lastError = `${model}: ${data?.error?.message ?? response.status}`;
+        continue; // quota / not found → try next model
+      }
+
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      const cleaned = text.replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim();
+      const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+      if (!arrayMatch) {
+        return json(res, 500, { error: `Gemini returned no JSON array (model: ${model})` });
+      }
+
+      const recommendations = JSON.parse(arrayMatch[0]);
+      if (!Array.isArray(recommendations)) {
+        return json(res, 500, { error: 'unexpected Gemini response format' });
+      }
+
+      return json(res, 200, recommendations.slice(0, 2));
+    } catch (err) {
+      lastError = `${model}: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  return json(res, 503, { error: `Gemini: ${lastError}` });
 }
