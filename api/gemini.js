@@ -46,7 +46,7 @@ ${subjectLine}
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -59,11 +59,14 @@ ${subjectLine}
 
     const data = await response.json();
     if (!response.ok) {
-      return json(res, response.status, { error: 'Gemini API error', detail: data });
+      const detail = data?.error?.message ?? JSON.stringify(data);
+      return json(res, response.status, { error: `Gemini: ${detail}` });
     }
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]';
-    const recommendations = JSON.parse(text);
+    // strip markdown code fences if present
+    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const recommendations = JSON.parse(cleaned);
     if (!Array.isArray(recommendations)) {
       return json(res, 500, { error: 'unexpected Gemini response format' });
     }
