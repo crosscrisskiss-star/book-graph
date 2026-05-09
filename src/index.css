@@ -86,6 +86,9 @@ body {
 .book-list-main:hover {
   border-color: #3B82F6;
 }
+.book-list-main.read {
+  border-left: 3px solid #22C55E;
+}
 .book-list-title {
   display: block;
   font-size: 12px;
@@ -344,6 +347,28 @@ body {
 .btn-recommend2:hover:not(:disabled) { background: #312e81; }
 .btn-recommend2:disabled { opacity: 0.5; cursor: not-allowed; }
 .rec-message { font-size: 11px; color: #86efac; text-align: center; padding: 2px 0; }
+
+.btn-read-toggle {
+  display: block;
+  width: 100%;
+  margin: 10px 0 6px;
+  padding: 8px;
+  background: #1E293B;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #94A3B8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+.btn-read-toggle:hover { background: #273549; }
+.btn-read-toggle.read {
+  background: #052e16;
+  border-color: #16a34a;
+  color: #4ade80;
+}
+.btn-read-toggle.read:hover { background: #064923; }
 
 .btn-library {
   display: block;

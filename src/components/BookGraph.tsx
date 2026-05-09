@@ -61,8 +61,11 @@ function escapeXml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function nodeLabel(title: string): string {
-  return title.length > 20 ? `${title.slice(0, 18)}...` : title;
+function nodeLabel(title: string, author?: string): string {
+  const t = title.length > 18 ? `${title.slice(0, 16)}...` : title;
+  if (!author) return t;
+  const a = author.length > 14 ? `${author.slice(0, 12)}...` : author;
+  return `${t}\n${a}`;
 }
 
 export function BookGraph({ data, enabledTypes, selectedId, onSelectBook }: Props) {
@@ -105,6 +108,13 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook }: Prop
             'background-position-y': '50%',
             'background-width': '100%',
             'background-height': '100%',
+          },
+        },
+        {
+          selector: 'node[?read]',
+          style: {
+            'border-color': '#22C55E',
+            'border-width': 2,
           },
         },
         {
@@ -174,14 +184,16 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook }: Prop
       const cover = coverForBook(book);
       if (existingNodeIds.has(book.id)) {
         const node = cy.getElementById(book.id);
-        node.data('label', nodeLabel(book.title));
+        node.data('label', nodeLabel(book.title, book.authors?.[0]));
+        node.data('read', book.read ?? false);
         if (cover) node.data('cover', cover);
         else node.removeData('cover');
       } else {
         added.push({
           data: {
             id: book.id,
-            label: nodeLabel(book.title),
+            label: nodeLabel(book.title, book.authors?.[0]),
+            read: book.read ?? false,
             ...(cover ? { cover } : {}),
           },
         });

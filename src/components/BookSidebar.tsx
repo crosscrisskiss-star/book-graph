@@ -39,6 +39,7 @@ interface Props {
   onAddBook: (book: Book) => void;
   onAddRelationship: (rel: Omit<Relationship, 'id'>) => void;
   onRemove: (id: string) => void;
+  onToggleRead: (id: string) => void;
   onClose: () => void;
 }
 
@@ -54,6 +55,7 @@ export function BookSidebar({
   onAddBook,
   onAddRelationship,
   onRemove,
+  onToggleRead,
   onClose,
 }: Props) {
   const [expanding, setExpanding] = useState<RelationshipType | null>(null);
@@ -185,6 +187,12 @@ export function BookSidebar({
         <div className="sidebar-meta">{TEXT.series}: {series.join(', ')}</div>
       )}
 
+      <button
+        className={`btn-read-toggle${book.read ? ' read' : ''}`}
+        onClick={() => onToggleRead(book.id)}
+      >
+        {book.read ? '✓ 既読' : '○ 未読'}
+      </button>
       <button className="btn-library" onClick={() => setShowLibrary(true)}>
         {TEXT.borrow}
       </button>

@@ -59,7 +59,10 @@ function BookList({ books, selectedId, addingRecId, onSelect, onRemove, onRecomm
             key={book.id}
             className={`book-list-item${book.id === selectedId ? ' selected' : ''}`}
           >
-            <button className="book-list-main" onClick={() => onSelect(book.id)}>
+            <button
+              className={`book-list-main${book.read ? ' read' : ''}`}
+              onClick={() => onSelect(book.id)}
+            >
               <span className="book-list-title">{book.title}</span>
               {book.authors?.[0] && (
                 <span className="book-list-author">{book.authors[0]}</span>
@@ -165,6 +168,15 @@ export default function App() {
     } finally {
       setAddingRecId(null);
     }
+  }
+
+  function toggleRead(id: string) {
+    updateGraph((prev) => ({
+      ...prev,
+      books: prev.books.map((book) =>
+        book.id === id ? { ...book, read: !book.read } : book
+      ),
+    }));
   }
 
   function removeBook(id: string) {
@@ -274,7 +286,7 @@ export default function App() {
 
       {showSearch && (
         <div className="search-overlay">
-          <BookSearch onAdd={addBook} existingIds={existingIds} />
+          <BookSearch onAdd={(book) => { addBook(book); setShowSearch(false); }} existingIds={existingIds} />
         </div>
       )}
 
@@ -316,6 +328,7 @@ export default function App() {
             onAddBook={addBook}
             onAddRelationship={addRelationship}
             onRemove={removeBook}
+            onToggleRead={toggleRead}
             onClose={() => setSelectedId(null)}
           />
         )}

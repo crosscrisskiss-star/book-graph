@@ -10,6 +10,7 @@ export interface Book {
   description?: string;
   olKey: string;
   isbn?: string;
+  read?: boolean;
 }
 
 export type RelationshipType =
