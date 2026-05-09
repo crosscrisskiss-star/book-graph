@@ -130,16 +130,30 @@ export function BookSidebar({
         subjects
       );
 
+      if (recs.length === 0) {
+        setRecMessage('Geminiからおすすめを取得できませんでした');
+        return;
+      }
+
       let added = 0;
       for (const rec of recs.slice(0, 2)) {
-        // NDL → Google Books の順で探す
-        const ndlResults = await searchBooksNDL(rec.title);
-        const ndlMatch = ndlResults.find((b) => !existingIds.has(b.id) && b.id !== book.id);
+        const isNew = (b: Book) => !existingIds.has(b.id) && b.id !== book.id;
+        const titleAuthor = [rec.title, rec.author].filter(Boolean).join(' ');
 
-        let found: Book | null = ndlMatch ?? null;
+        // 1. NDL タイトル検索
+        const ndlResults = await searchBooksNDL(rec.title);
+        let found = ndlResults.find(isNew) ?? null;
+
+        // 2. Google Books: タイトル + 著者名
         if (!found) {
+          const googleResults = await searchBooksGoogle(titleAuthor, 8);
+          found = googleResults.find(isNew) ?? null;
+        }
+
+        // 3. Google Books: タイトルのみ（著者名がなくても試す）
+        if (!found && rec.author) {
           const googleResults = await searchBooksGoogle(rec.title, 5);
-          found = googleResults.find((b) => !existingIds.has(b.id) && b.id !== book.id) ?? null;
+          found = googleResults.find(isNew) ?? null;
         }
 
         if (found) {
@@ -150,7 +164,11 @@ export function BookSidebar({
         }
       }
 
-      setRecMessage(TEXT.recommend2Done(added));
+      setRecMessage(
+        added > 0
+          ? TEXT.recommend2Done(added)
+          : `おすすめ:「${recs.map((r) => r.title).join('」「')}」は見つかりませんでした`
+      );
     } catch (e) {
       setRecMessage(e instanceof Error ? e.message : 'エラーが発生しました');
     } finally {
