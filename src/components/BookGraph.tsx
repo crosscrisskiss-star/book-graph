@@ -419,12 +419,16 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
     runLayout(cy, 2500);
   }, [layoutKey]);
 
-  // Highlight selected
+  // Highlight selected + center on node
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
     cy.nodes(BOOK_NODE_SELECTOR).removeClass('highlighted');
-    if (selectedId) cy.getElementById(selectedId).addClass('highlighted');
+    if (!selectedId) return;
+    const node = cy.getElementById(selectedId);
+    if (!node.length) return;
+    node.addClass('highlighted');
+    cy.animate({ center: { eles: node }, duration: 300, easing: 'ease-in-out-cubic' });
   }, [selectedId]);
 
   return (
