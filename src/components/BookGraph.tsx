@@ -92,6 +92,29 @@ function fitVisible(cy: cytoscape.Core) {
   if (nodes.length > 0) cy.fit(nodes, 48);
 }
 
+function saveCurrentPositions(cy: cytoscape.Core) {
+  const positions: PositionMap = loadPositions();
+  cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+    positions[node.id()] = { ...node.position() };
+  });
+  savePositions(positions);
+}
+
+function restoreSavedPositions(cy: cytoscape.Core, books: Book[], saved: PositionMap): boolean {
+  let restored = false;
+  cy.batch(() => {
+    for (const book of books) {
+      const position = saved[book.id];
+      if (!position) continue;
+      const node = cy.getElementById(book.id);
+      if (!node.length) continue;
+      node.position(position);
+      restored = true;
+    }
+  });
+  return restored;
+}
+
 function applyGridLayout(cy: cytoscape.Core) {
   const nodes = cy.nodes(BOOK_NODE_SELECTOR);
   if (nodes.length === 0) return;
@@ -188,10 +211,15 @@ export function BookGraph({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
+  const booksRef = useRef(data.books);
   const groupByAuthorRef = useRef(groupByAuthor);
   const onSelectBookRef = useRef(onSelectBook);
   const positionsLoadedRef = useRef(false);
   const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    booksRef.current = data.books;
+  }, [data.books]);
 
   useEffect(() => {
     onSelectBookRef.current = onSelectBook;
@@ -204,15 +232,11 @@ export function BookGraph({
   const applyCurrentLayout = useCallback(() => {
     const cy = cyRef.current;
     if (!cy) return;
-    if (groupByAuthorRef.current) applyAuthorLayout(cy, data.books);
+    if (groupByAuthorRef.current) applyAuthorLayout(cy, booksRef.current);
     else applyGridLayout(cy);
     setZoom(cy.zoom());
-    const positions: PositionMap = {};
-    cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
-      positions[node.id()] = { ...node.position() };
-    });
-    savePositions(positions);
-  }, [data.books]);
+    saveCurrentPositions(cy);
+  }, []);
 
   const scheduleLayout = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -309,11 +333,7 @@ export function BookGraph({
     cy.on('zoom', () => setZoom(cy.zoom()));
     cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (event) => onSelectBookRef.current(event.target.id()));
     cy.on('dragfree', `node${BOOK_NODE_SELECTOR}`, () => {
-      const positions: PositionMap = {};
-      cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
-        positions[node.id()] = { ...node.position() };
-      });
-      savePositions(positions);
+      saveCurrentPositions(cy);
     });
 
     cyRef.current = cy;
@@ -331,11 +351,13 @@ export function BookGraph({
     const existingNodeIds = new Set(cy.nodes(BOOK_NODE_SELECTOR).map((node) => node.id()));
     const newBookIds = new Set(data.books.map((book) => book.id));
     let changed = false;
+    let removed = false;
 
     cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
       if (newBookIds.has(node.id())) return;
       node.remove();
       changed = true;
+      removed = true;
     });
 
     function asyncLoadCover(bookId: string, proxyUrl: string, fallback: string) {
@@ -391,21 +413,16 @@ export function BookGraph({
     }
 
     if (changed) {
+      const saved = loadPositions();
       if (!positionsLoadedRef.current) {
         positionsLoadedRef.current = true;
-        const saved = loadPositions();
         const allSaved = data.books.length > 0 && data.books.every((b) => saved[b.id]);
         if (allSaved) {
           window.requestAnimationFrame(() => {
             window.requestAnimationFrame(() => {
               const c = cyRef.current;
               if (!c || cancelled) return;
-              c.batch(() => {
-                for (const book of data.books) {
-                  const node = c.getElementById(book.id);
-                  if (node.length) node.position(saved[book.id]);
-                }
-              });
+              restoreSavedPositions(c, data.books, saved);
               fitVisible(c);
               setZoom(c.zoom());
             });
@@ -413,8 +430,14 @@ export function BookGraph({
         } else {
           scheduleLayout();
         }
-      } else {
+      } else if (added.some((node) => !saved[String(node.data.id)])) {
         scheduleLayout();
+      } else {
+        if (added.length > 0) restoreSavedPositions(cy, data.books, saved);
+        if (removed || added.length > 0) {
+          fitVisible(cy);
+          setZoom(cy.zoom());
+        }
       }
     }
 
@@ -479,9 +502,14 @@ export function BookGraph({
     const node = cy.getElementById(bookId);
     if (!node.length) return;
 
-    cy.zoom(1);
-    cy.center(node);
-    setZoom(1);
+    // Pan to node only if it's outside the visible viewport; don't change zoom
+    const bb = node.renderedBoundingBox();
+    const w = cy.width();
+    const h = cy.height();
+    const inView = bb.x1 >= 0 && bb.y1 >= 0 && bb.x2 <= w && bb.y2 <= h;
+    if (!inView) {
+      cy.animate({ center: { eles: node } }, { duration: 200 });
+    }
   }, [focusRequest]);
 
   return (
