@@ -207,7 +207,12 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
-    const text = await file.text();
+    // ブクログCSVはShift-JIS。UTF-8で読んでヘッダーがなければShift-JISで再試行
+    const buffer = await file.arrayBuffer();
+    let text = new TextDecoder('utf-8').decode(buffer);
+    if (!text.includes('タイトル')) {
+      text = new TextDecoder('shift-jis').decode(buffer);
+    }
     const books = parseBooklogCSV(text);
     if (books.length === 0) {
       setImportMessage('本が見つかりませんでした');
