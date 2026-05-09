@@ -35,9 +35,12 @@ function parseCSV(text: string): string[][] {
 
 export function parseBooklogCSV(csvText: string): Book[] {
   const rows = parseCSV(csvText);
-  if (rows.length < 2) return [];
 
-  const header = rows[0];
+  // ヘッダー行を探す（'タイトル'を含む最初の行）
+  const headerIdx = rows.findIndex((row) => row.some((cell) => cell.trim() === 'タイトル'));
+  if (headerIdx === -1 || headerIdx >= rows.length - 1) return [];
+
+  const header = rows[headerIdx].map((h) => h.trim());
   const col = (name: string) => header.indexOf(name);
 
   const titleIdx = col('タイトル');
@@ -46,11 +49,9 @@ export function parseBooklogCSV(csvText: string): Book[] {
   const yearIdx = col('発行年');
   const statusIdx = col('読書状況');
 
-  if (titleIdx === -1) return [];
-
   const books: Book[] = [];
 
-  for (const row of rows.slice(1)) {
+  for (const row of rows.slice(headerIdx + 1)) {
     const title = row[titleIdx]?.trim();
     if (!title) continue;
 

@@ -213,9 +213,13 @@ export default function App() {
     if (!text.includes('タイトル')) {
       text = new TextDecoder('shift-jis').decode(buffer);
     }
+    if (!text.includes('タイトル')) {
+      setImportMessage('ブクログCSVの形式を認識できませんでした');
+      return;
+    }
     const books = parseBooklogCSV(text);
     if (books.length === 0) {
-      setImportMessage('本が見つかりませんでした');
+      setImportMessage('本が見つかりませんでした（データ行が空か形式が異なります）');
       return;
     }
     updateGraph((prev) => {
