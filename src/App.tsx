@@ -55,27 +55,16 @@ function relId(source: string, target: string, type: RelationshipType): string {
 
 interface BookListProps {
   books: Book[];
+  filteredBooks: Book[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   categories: string[];
+  filters: BookSearchFilters;
+  onFilterChange: (key: keyof BookSearchFilters, value: string) => void;
 }
 
-function BookList({ books, selectedId, onSelect, categories }: BookListProps) {
-  const [filters, setFilters] = useState<BookSearchFilters>({
-    title: '',
-    author: '',
-    publisher: '',
-    category: '',
-    rating: '',
-  });
-
+function BookList({ books, filteredBooks, selectedId, onSelect, categories, filters, onFilterChange }: BookListProps) {
   if (books.length === 0) return null;
-
-  const filteredBooks = books.filter((book) => matchesBookFilters(book, filters));
-
-  function updateFilter(key: keyof BookSearchFilters, value: string) {
-    setFilters((current) => ({ ...current, [key]: value }));
-  }
 
   const usedCategories = categories.filter((c) => books.some((b) => b.category === c));
   const usedRatings = [...new Set(books.map((b) => b.rating).filter((r): r is number => r !== undefined))].sort();
@@ -88,26 +77,26 @@ function BookList({ books, selectedId, onSelect, categories }: BookListProps) {
         <input
           className="book-list-filter-input"
           value={filters.title}
-          onChange={(event) => updateFilter('title', event.target.value)}
+          onChange={(event) => onFilterChange('title', event.target.value)}
           placeholder={TEXT.listFilterTitle}
         />
         <input
           className="book-list-filter-input"
           value={filters.author}
-          onChange={(event) => updateFilter('author', event.target.value)}
+          onChange={(event) => onFilterChange('author', event.target.value)}
           placeholder={TEXT.listFilterAuthor}
         />
         <input
           className="book-list-filter-input"
           value={filters.publisher}
-          onChange={(event) => updateFilter('publisher', event.target.value)}
+          onChange={(event) => onFilterChange('publisher', event.target.value)}
           placeholder={TEXT.listFilterPublisher}
         />
         {usedCategories.length > 0 && (
           <select
             className="book-list-filter-select"
             value={filters.category}
-            onChange={(e) => updateFilter('category', e.target.value)}
+            onChange={(e) => onFilterChange('category', e.target.value)}
           >
             <option value="">すべてのカテゴリ</option>
             {usedCategories.map((cat) => (
@@ -119,7 +108,7 @@ function BookList({ books, selectedId, onSelect, categories }: BookListProps) {
           <select
             className="book-list-filter-select"
             value={filters.rating}
-            onChange={(e) => updateFilter('rating', e.target.value)}
+            onChange={(e) => onFilterChange('rating', e.target.value)}
           >
             <option value="">すべての評価</option>
             {usedRatings.map((r) => (
@@ -164,6 +153,9 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [addingRecId, setAddingRecId] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
+  const [listFilters, setListFilters] = useState<BookSearchFilters>({
+    title: '', author: '', publisher: '', category: '', rating: '',
+  });
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [layoutKey, setLayoutKey] = useState(0);
   const [focusRequest, setFocusRequest] = useState<string | null>(null);
@@ -481,6 +473,11 @@ export default function App() {
   }, [graph.books]);
 
   const selectedBook = graph.books.find((book) => book.id === sidebarBookId) ?? null;
+  const filteredBooks = graph.books.filter((book) => matchesBookFilters(book, listFilters));
+
+  function updateListFilter(key: keyof BookSearchFilters, value: string) {
+    setListFilters((prev) => ({ ...prev, [key]: value }));
+  }
   const existingIds = new Set(graph.books.map((book) => book.id));
 
   return (
@@ -622,9 +619,12 @@ export default function App() {
               <RelationshipFilter enabled={enabledTypes} onChange={toggleType} />
               <BookList
                 books={graph.books}
+                filteredBooks={filteredBooks}
                 selectedId={selectedId}
                 onSelect={selectBookFromList}
                 categories={graph.categories ?? []}
+                filters={listFilters}
+                onFilterChange={updateListFilter}
               />
             </>
           )}
@@ -638,7 +638,7 @@ export default function App() {
             </div>
           ) : (
             <BookGraph
-              data={graph}
+              data={{ books: filteredBooks, relationships: graph.relationships }}
               enabledTypes={enabledTypes}
               selectedId={selectedId}
               onSelectBook={selectBookFromGraph}
