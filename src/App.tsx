@@ -109,7 +109,10 @@ export default function App() {
     cloudLoad(syncCode).then((data) => {
       if (data) { setGraph(data); saveGraph(data); setLastSynced(new Date()); }
       setSyncStatus('idle');
-    }).catch(() => setSyncStatus('error'));
+    }).catch((e: unknown) => {
+      console.error('[sync] load failed:', e);
+      setSyncStatus('error');
+    });
   }, [syncCode]);
 
   // Cloud: auto-save 3s after graph change
@@ -120,7 +123,10 @@ export default function App() {
       setSyncStatus('saving');
       cloudSave(syncCode, graph)
         .then(() => { setLastSynced(new Date()); setSyncStatus('idle'); })
-        .catch(() => setSyncStatus('error'));
+        .catch((e: unknown) => {
+          console.error('[sync] save failed:', e);
+          setSyncStatus('error');
+        });
     }, 3000);
   }, [graph, syncCode]);
 
@@ -422,9 +428,12 @@ export default function App() {
                     cloudLoad(syncCode!).then((data) => {
                       if (data) { setGraph(data); saveGraph(data); setLastSynced(new Date()); }
                       setSyncStatus('idle');
-                    }).catch(() => setSyncStatus('error'));
+                    }).catch((e: unknown) => { console.error('[sync] manual load:', e); setSyncStatus('error'); });
                   }}
                 >↓ 今すぐ取得</button>
+                {syncStatus === 'error' && (
+                  <p className="sync-error">⚠ 同期に失敗しました。ブラウザの開発者コンソール（F12）でエラー詳細を確認してください。</p>
+                )}
                 <button className="sync-disconnect-btn" onClick={disconnectSync}>
                   同期を解除
                 </button>

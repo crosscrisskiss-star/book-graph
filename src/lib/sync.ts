@@ -9,7 +9,7 @@ export function isSyncConfigured(): boolean {
 }
 
 async function rest(path: string, options?: RequestInit): Promise<Response> {
-  return fetch(`${URL_}/rest/v1${path}`, {
+  const res = await fetch(`${URL_}/rest/v1${path}`, {
     ...options,
     headers: {
       apikey: KEY!,
@@ -18,21 +18,29 @@ async function rest(path: string, options?: RequestInit): Promise<Response> {
       ...(options?.headers ?? {}),
     },
   });
+  return res;
 }
 
 export async function cloudLoad(code: string): Promise<GraphData | null> {
   const res = await rest(`/graphs?code=eq.${encodeURIComponent(code)}&select=data`);
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`load ${res.status}: ${body}`);
+  }
   const rows: { data: GraphData }[] = await res.json();
   return rows[0]?.data ?? null;
 }
 
 export async function cloudSave(code: string, graph: GraphData): Promise<void> {
-  await rest('/graphs', {
+  const res = await rest('/graphs', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates' } as Record<string, string>,
     body: JSON.stringify({ code, data: graph }),
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`save ${res.status}: ${body}`);
+  }
 }
 
 const CODE_KEY = 'syncCode';

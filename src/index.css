@@ -337,6 +337,7 @@ body {
   cursor: pointer;
 }
 .sync-disconnect-btn:hover { border-color: #ef4444; color: #fca5a5; }
+.sync-error { font-size: 11px; color: #f87171; margin: 4px 0; line-height: 1.4; }
 .sync-input-row { display: flex; gap: 6px; }
 .sync-input {
   flex: 1;
