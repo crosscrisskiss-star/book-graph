@@ -335,6 +335,13 @@ body {
 .empty-icon { font-size: 48px; }
 .empty-text { font-size: 14px; text-align: center; max-width: 280px; }
 
+/* Cytoscape box-selection rectangle */
+.cytoscape-box-selection {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1.5px solid #3B82F6;
+  border-radius: 2px;
+}
+
 /* Sync overlay */
 .sync-overlay {
   position: absolute;

@@ -328,16 +328,22 @@ export function BookGraph({
         },
       ],
       layout: { name: 'preset' },
+      boxSelectionEnabled: true,
     });
+
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedSave = () => {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => saveCurrentPositions(cy), 80);
+    };
 
     cy.on('zoom', () => setZoom(cy.zoom()));
     cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (event) => onSelectBookRef.current(event.target.id()));
-    cy.on('dragfree', `node${BOOK_NODE_SELECTOR}`, () => {
-      saveCurrentPositions(cy);
-    });
+    cy.on('dragfree', `node${BOOK_NODE_SELECTOR}`, debouncedSave);
 
     cyRef.current = cy;
     return () => {
+      if (saveTimer) clearTimeout(saveTimer);
       cy.destroy();
       cyRef.current = null;
     };
