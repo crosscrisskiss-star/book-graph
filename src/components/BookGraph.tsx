@@ -13,6 +13,7 @@ interface Props {
   selectedId: string | null;
   onSelectBook: (id: string) => void;
   layoutKey: number;
+  groupByAuthor: boolean;
 }
 
 function coverForBook(book: Book): string {
@@ -78,10 +79,13 @@ function phantomId(bookId: string): string {
   return `${bookId}::a`;
 }
 
+function groupNodeId(author: string): string {
+  return `author_group::${author}`;
+}
+
 function calcPhantomY(title: string): number {
-  // 110px wide, font-size 10, Japanese chars ~10px wide → ~11 chars/line, line-height ~14px
   const lines = Math.max(1, Math.ceil(title.length / 11));
-  return 51 + lines * 14 + 8; // node-bottom(48) + margin(3) + text + gap(8)
+  return 51 + lines * 14 + 8;
 }
 
 function syncPhantom(cy: cytoscape.Core, bookId: string) {
@@ -94,9 +98,22 @@ function syncPhantom(cy: cytoscape.Core, bookId: string) {
   }
 }
 
-export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layoutKey }: Props) {
+const BOOK_NODE_SELECTOR = ':not(.author-phantom):not(.author-group)';
+
+function runLayout(cy: cytoscape.Core, duration = 1500) {
+  cy.elements(`node${BOOK_NODE_SELECTOR}, node.author-group, edge:not(.hidden)`).layout({
+    name: 'cola',
+    animate: true,
+    randomize: false,
+    maxSimulationTime: duration,
+  } as Parameters<typeof cy.layout>[0]).run();
+}
+
+export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layoutKey, groupByAuthor }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
+  const groupByAuthorRef = useRef(groupByAuthor);
+  useEffect(() => { groupByAuthorRef.current = groupByAuthor; }, [groupByAuthor]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -125,6 +142,28 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
           },
         },
         {
+          selector: 'node.author-group',
+          style: {
+            'background-color': '#0F172A',
+            'background-opacity': 0.9,
+            'border-color': '#3B82F6',
+            'border-width': 2,
+            label: 'data(label)',
+            color: '#93C5FD',
+            'font-size': 12,
+            'font-weight': 700,
+            'text-valign': 'top',
+            'text-halign': 'center',
+            'text-margin-y': 6,
+            'text-wrap': 'wrap',
+            'text-max-width': '200px',
+            padding: '24px',
+            shape: 'round-rectangle',
+            width: 'label',
+            height: 'label',
+          },
+        },
+        {
           selector: 'node.author-phantom',
           style: {
             'background-opacity': 0,
@@ -142,6 +181,10 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
           },
         },
         {
+          selector: 'node.author-phantom.phantom-hidden',
+          style: { label: '' },
+        },
+        {
           selector: 'node[cover]',
           style: {
             'background-image': 'data(cover)',
@@ -155,24 +198,15 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
         },
         {
           selector: 'node[?read]',
-          style: {
-            'border-color': '#22C55E',
-            'border-width': 2,
-          },
+          style: { 'border-color': '#22C55E', 'border-width': 2 },
         },
         {
           selector: 'node:selected',
-          style: {
-            'border-color': '#F59E0B',
-            'border-width': 3,
-          },
+          style: { 'border-color': '#F59E0B', 'border-width': 3 },
         },
         {
           selector: 'node.highlighted',
-          style: {
-            'border-color': '#F59E0B',
-            'border-width': 3,
-          },
+          style: { 'border-color': '#F59E0B', 'border-width': 3 },
         },
         {
           selector: 'edge',
@@ -197,15 +231,15 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
       layout: { name: 'grid' },
     });
 
-    cy.on('tap', 'node:not(.author-phantom)', (e) => {
+    cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (e) => {
       onSelectBook(e.target.id());
     });
 
     cy.on('layoutstop', () => {
-      cy.nodes(':not(.author-phantom)').forEach((n) => syncPhantom(cy, n.id()));
+      cy.nodes(BOOK_NODE_SELECTOR).forEach((n) => syncPhantom(cy, n.id()));
     });
 
-    cy.on('drag', 'node:not(.author-phantom)', (e) => {
+    cy.on('drag', `node${BOOK_NODE_SELECTOR}`, (e) => {
       syncPhantom(cy, e.target.id());
     });
 
@@ -223,11 +257,10 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
 
     let cancelled = false;
 
-    const existingNodeIds = new Set(cy.nodes(':not(.author-phantom)').map((n) => n.id()));
+    const existingNodeIds = new Set(cy.nodes(BOOK_NODE_SELECTOR).map((n) => n.id()));
     const newBookIds = new Set(data.books.map((b) => b.id));
 
-    // Remove deleted nodes + their phantoms
-    cy.nodes(':not(.author-phantom)').forEach((n) => {
+    cy.nodes(BOOK_NODE_SELECTOR).forEach((n) => {
       if (!newBookIds.has(n.id())) {
         cy.getElementById(phantomId(n.id())).remove();
         n.remove();
@@ -250,14 +283,13 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
       img.src = proxyUrl;
     }
 
-    // Add/update nodes
     const added: cytoscape.ElementDefinition[] = [];
     for (const book of data.books) {
       const generated = generatedCoverForBook(book);
       const proxyUrl = coverForBook(book);
       const isDataUri = proxyUrl.startsWith('data:');
-
       const py = calcPhantomY(book.title);
+
       if (existingNodeIds.has(book.id)) {
         const node = cy.getElementById(book.id);
         node.data('label', nodeTitle(book.title));
@@ -279,12 +311,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
 
     if (added.length > 0) {
       cy.add(added);
-      cy.elements('node:not(.author-phantom), edge:not(.hidden)').layout({
-        name: 'cola',
-        animate: true,
-        randomize: false,
-        maxSimulationTime: 1500,
-      } as Parameters<typeof cy.layout>[0]).run();
+      if (!groupByAuthorRef.current) runLayout(cy, 1500);
     }
 
     return () => { cancelled = true; };
@@ -306,13 +333,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
       if (!existingEdgeIds.has(rel.id)) {
         if (!cy.getElementById(rel.source).length || !cy.getElementById(rel.target).length) continue;
         cy.add({
-          data: {
-            id: rel.id,
-            source: rel.source,
-            target: rel.target,
-            color: REL_COLORS[rel.type],
-            label: rel.label ?? '',
-          },
+          data: { id: rel.id, source: rel.source, target: rel.target, color: REL_COLORS[rel.type], label: rel.label ?? '' },
         });
       }
     }
@@ -327,26 +348,73 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
     });
   }, [data.relationships, enabledTypes]);
 
+  // Author grouping
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+
+    // Remove existing groups
+    cy.nodes(BOOK_NODE_SELECTOR).move({ parent: null });
+    cy.nodes('.author-group').remove();
+
+    if (groupByAuthor) {
+      // Build author → [bookId] map (only authors with 2+ books)
+      const authorMap = new Map<string, string[]>();
+      for (const book of data.books) {
+        const author = book.authors?.[0]?.trim();
+        if (!author) continue;
+        if (!authorMap.has(author)) authorMap.set(author, []);
+        authorMap.get(author)!.push(book.id);
+      }
+
+      const groupDefs: cytoscape.ElementDefinition[] = [];
+      authorMap.forEach((ids, author) => {
+        if (ids.length < 2) return;
+        groupDefs.push({ data: { id: groupNodeId(author), label: author }, classes: 'author-group' });
+      });
+
+      if (groupDefs.length > 0) {
+        cy.add(groupDefs);
+        authorMap.forEach((ids, author) => {
+          if (ids.length < 2) return;
+          const gid = groupNodeId(author);
+          ids.forEach((bid) => {
+            const n = cy.getElementById(bid);
+            if (n.length) n.move({ parent: gid });
+          });
+        });
+      }
+
+      // Hide phantom labels for grouped books (author shown in group header)
+      cy.nodes('.author-phantom').forEach((n) => {
+        const bookId = n.id().replace(/::a$/, '');
+        const bookNode = cy.getElementById(bookId);
+        if (bookNode.length && bookNode.data('parent')) {
+          n.addClass('phantom-hidden');
+        } else {
+          n.removeClass('phantom-hidden');
+        }
+      });
+    } else {
+      cy.nodes('.author-phantom').removeClass('phantom-hidden');
+    }
+
+    if (cy.nodes(BOOK_NODE_SELECTOR).length > 0) runLayout(cy, 2000);
+  }, [groupByAuthor, data.books]);
+
   // Re-layout triggered by layoutKey
   useEffect(() => {
     const cy = cyRef.current;
-    if (!cy || cy.nodes(':not(.author-phantom)').length === 0 || layoutKey === 0) return;
-    cy.elements('node:not(.author-phantom), edge:not(.hidden)').layout({
-      name: 'cola',
-      animate: true,
-      randomize: false,
-      maxSimulationTime: 2500,
-    } as Parameters<typeof cy.layout>[0]).run();
+    if (!cy || cy.nodes(BOOK_NODE_SELECTOR).length === 0 || layoutKey === 0) return;
+    runLayout(cy, 2500);
   }, [layoutKey]);
 
   // Highlight selected
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
-    cy.nodes(':not(.author-phantom)').removeClass('highlighted');
-    if (selectedId) {
-      cy.getElementById(selectedId).addClass('highlighted');
-    }
+    cy.nodes(BOOK_NODE_SELECTOR).removeClass('highlighted');
+    if (selectedId) cy.getElementById(selectedId).addClass('highlighted');
   }, [selectedId]);
 
   return <div ref={containerRef} className="graph-canvas" />;

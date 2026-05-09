@@ -85,6 +85,7 @@ export default function App() {
   const [importMessage, setImportMessage] = useState('');
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [layoutKey, setLayoutKey] = useState(0);
+  const [groupByAuthor, setGroupByAuthor] = useState(false);
   const [syncCode, setSyncCode] = useState<string | null>(loadSyncCode);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'loading' | 'error'>('idle');
   const [showSyncPanel, setShowSyncPanel] = useState(false);
@@ -354,6 +355,14 @@ export default function App() {
             再配置
           </button>
         )}
+        {graph.books.length > 0 && (
+          <button
+            className={`btn-group-author${groupByAuthor ? ' active' : ''}`}
+            onClick={() => setGroupByAuthor((v) => !v)}
+          >
+            著者でまとめる
+          </button>
+        )}
         {isSyncConfigured() && (
           <button
             className={`btn-sync ${syncStatus}`}
@@ -480,6 +489,7 @@ export default function App() {
               selectedId={selectedId}
               onSelectBook={setSelectedId}
               layoutKey={layoutKey}
+              groupByAuthor={groupByAuthor}
             />
           )}
 

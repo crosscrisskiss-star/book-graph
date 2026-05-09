@@ -35,6 +35,18 @@ body {
   cursor: pointer;
 }
 .btn-relayout:hover { background: #14532d; }
+.btn-group-author {
+  padding: 7px 12px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #94A3B8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-group-author:hover { background: #1e3a5f; border-color: #3B82F6; color: #93C5FD; }
+.btn-group-author.active { background: #1e3a5f; border-color: #3B82F6; color: #93C5FD; }
 .btn-csv {
   padding: 7px 12px;
   background: #1e1b4b;
