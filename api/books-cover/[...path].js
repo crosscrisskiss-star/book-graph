@@ -19,15 +19,14 @@ export default async function handler(request) {
       },
     });
 
-    if (!upstream.ok) {
+    const ct = upstream.headers.get('content-type') ?? '';
+    if (!upstream.ok || !ct.startsWith('image/')) {
       return new Response(FALLBACK_SVG, {
         headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=3600' },
       });
     }
 
-    const headers = new Headers({ 'Cache-Control': 'public, max-age=86400' });
-    const ct = upstream.headers.get('content-type');
-    if (ct) headers.set('content-type', ct);
+    const headers = new Headers({ 'Cache-Control': 'public, max-age=86400', 'content-type': ct });
     return new Response(upstream.body, { status: 200, headers });
   } catch {
     return new Response(FALLBACK_SVG, {
