@@ -53,9 +53,11 @@ function escapeXml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function nodeAuthorLabel(author?: string): string {
-  if (!author) return '';
-  return author.length > 14 ? `${author.slice(0, 12)}…` : author;
+function nodeLabel(title: string, author?: string): string {
+  const t = title.length > 16 ? `${title.slice(0, 14)}…` : title;
+  if (!author) return t;
+  const a = author.length > 14 ? `${author.slice(0, 12)}…` : author;
+  return `${t}\n${a}`;
 }
 
 export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNodeMenu, layoutKey }: Props) {
@@ -75,13 +77,13 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
             'border-width': 2,
             'border-color': '#475569',
             label: 'data(label)',
-            color: '#94A3B8',
+            color: '#F1F5F9',
             'font-size': 10,
             'text-valign': 'bottom',
             'text-halign': 'center',
             'text-margin-y': 3,
             'text-wrap': 'wrap',
-            'text-max-width': '80px',
+            'text-max-width': '90px',
             width: 68,
             height: 96,
             shape: 'round-rectangle',
@@ -177,7 +179,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
       const cover = coverForBook(book);
       if (existingNodeIds.has(book.id)) {
         const node = cy.getElementById(book.id);
-        node.data('label', nodeAuthorLabel(book.authors?.[0]));
+        node.data('label', nodeLabel(book.title, book.authors?.[0]));
         node.data('read', book.read ?? false);
         if (cover) node.data('cover', cover);
         else node.removeData('cover');
@@ -185,7 +187,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
         added.push({
           data: {
             id: book.id,
-            label: nodeAuthorLabel(book.authors?.[0]),
+            label: nodeLabel(book.title, book.authors?.[0]),
             read: book.read ?? false,
             ...(cover ? { cover } : {}),
           },

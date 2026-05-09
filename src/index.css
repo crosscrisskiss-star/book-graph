@@ -47,6 +47,21 @@ body {
 }
 .btn-csv:hover { background: #312e81; }
 .import-message { font-size: 12px; color: #86efac; }
+.btn-sync {
+  padding: 7px 12px;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #94A3B8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: monospace;
+}
+.btn-sync:hover { border-color: #60a5fa; color: #F1F5F9; }
+.btn-sync.saving { border-color: #f59e0b; color: #fcd34d; }
+.btn-sync.loading { border-color: #3b82f6; color: #93c5fd; }
+.btn-sync.error { border-color: #ef4444; color: #fca5a5; }
 
 /* Main layout */
 .app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
@@ -215,6 +230,83 @@ body {
 }
 .empty-icon { font-size: 48px; }
 .empty-text { font-size: 14px; text-align: center; max-width: 280px; }
+
+/* Sync overlay */
+.sync-overlay {
+  position: absolute;
+  top: 52px;
+  right: 16px;
+  z-index: 100;
+  width: 320px;
+}
+.sync-panel {
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sync-panel-title { font-size: 13px; font-weight: 700; color: #F1F5F9; }
+.sync-code-display { display: flex; align-items: center; gap: 8px; }
+.sync-code-value {
+  font-family: monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #60a5fa;
+  flex: 1;
+}
+.sync-copy-btn {
+  padding: 4px 10px;
+  background: #1d4ed8;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sync-copy-btn:hover { background: #1e40af; }
+.sync-hint { font-size: 11px; color: #64748B; }
+.sync-last { font-size: 11px; color: #4ade80; }
+.sync-pull-btn, .sync-new-btn, .sync-connect-btn {
+  padding: 7px 12px;
+  background: #0f172a;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sync-pull-btn:hover:not(:disabled), .sync-new-btn:hover, .sync-connect-btn:hover { background: #1e3a5f; }
+.sync-pull-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.sync-disconnect-btn {
+  padding: 6px 10px;
+  background: none;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #64748B;
+  font-size: 11px;
+  cursor: pointer;
+}
+.sync-disconnect-btn:hover { border-color: #ef4444; color: #fca5a5; }
+.sync-input-row { display: flex; gap: 6px; }
+.sync-input {
+  flex: 1;
+  padding: 7px 10px;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #F1F5F9;
+  font-size: 13px;
+  font-family: monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.sync-input:focus { outline: none; border-color: #3b82f6; }
 
 /* Search overlay */
 .search-overlay {

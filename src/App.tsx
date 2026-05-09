@@ -8,6 +8,10 @@ import { BookSidebar } from './components/BookSidebar';
 import { RelationshipFilter } from './components/RelationshipFilter';
 import { searchBooksGoogle } from './lib/googleBooks';
 import { parseBooklogCSV } from './lib/booklog';
+import {
+  isSyncConfigured, cloudLoad, cloudSave,
+  loadSyncCode, saveSyncCode, clearSyncCode, generateCode,
+} from './lib/sync';
 import { searchBooksNDL } from './lib/ndl';
 import { getBooksByAuthorNDL, getBooksBySubjectNDL } from './lib/ndl';
 import { getBooksByAuthor, getBooksBySubject } from './lib/openLibrary';
@@ -82,6 +86,12 @@ export default function App() {
   const [nodeMenu, setNodeMenu] = useState<{ bookId: string; x: number; y: number } | null>(null);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [layoutKey, setLayoutKey] = useState(0);
+  const [syncCode, setSyncCode] = useState<string | null>(loadSyncCode);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'loading' | 'error'>('idle');
+  const [showSyncPanel, setShowSyncPanel] = useState(false);
+  const [syncInput, setSyncInput] = useState('');
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   function updateGraph(fn: (prev: GraphData) => GraphData) {
@@ -90,6 +100,45 @@ export default function App() {
       saveGraph(next);
       return next;
     });
+  }
+
+  // Cloud: load on mount / code change
+  useEffect(() => {
+    if (!syncCode || !isSyncConfigured()) return;
+    setSyncStatus('loading');
+    cloudLoad(syncCode).then((data) => {
+      if (data) { setGraph(data); saveGraph(data); setLastSynced(new Date()); }
+      setSyncStatus('idle');
+    }).catch(() => setSyncStatus('error'));
+  }, [syncCode]);
+
+  // Cloud: auto-save 3s after graph change
+  useEffect(() => {
+    if (!syncCode || !isSyncConfigured()) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      setSyncStatus('saving');
+      cloudSave(syncCode, graph)
+        .then(() => { setLastSynced(new Date()); setSyncStatus('idle'); })
+        .catch(() => setSyncStatus('error'));
+    }, 3000);
+  }, [graph, syncCode]);
+
+  function activateCode(code: string) {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed) return;
+    saveSyncCode(trimmed);
+    setSyncCode(trimmed);
+    setSyncInput('');
+    setShowSyncPanel(false);
+  }
+
+  function disconnectSync() {
+    clearSyncCode();
+    setSyncCode(null);
+    setSyncStatus('idle');
+    setLastSynced(null);
+    setShowSyncPanel(false);
   }
 
   const addBook = useCallback(
@@ -298,6 +347,16 @@ export default function App() {
             再配置
           </button>
         )}
+        {isSyncConfigured() && (
+          <button
+            className={`btn-sync ${syncStatus}`}
+            onClick={() => setShowSyncPanel((v) => !v)}
+            title={syncCode ? `同期コード: ${syncCode}` : 'クラウド同期'}
+          >
+            {syncStatus === 'saving' ? '↑' : syncStatus === 'loading' ? '↓' : '☁'}
+            {syncCode ? ` ${syncCode.slice(0, 4)}-${syncCode.slice(4)}` : ' 同期'}
+          </button>
+        )}
         <button className="btn-csv" onClick={() => csvInputRef.current?.click()}>
           ブクログCSV
         </button>
@@ -319,6 +378,64 @@ export default function App() {
       {showSearch && (
         <div className="search-overlay">
           <BookSearch onAdd={(book) => { addBook(book); setShowSearch(false); }} existingIds={existingIds} />
+        </div>
+      )}
+
+      {showSyncPanel && isSyncConfigured() && (
+        <div className="sync-overlay">
+          <div className="sync-panel">
+            <div className="sync-panel-title">☁ クラウド同期</div>
+            {syncCode ? (
+              <>
+                <div className="sync-code-display">
+                  <span className="sync-code-value">{syncCode.slice(0, 4)}-{syncCode.slice(4)}</span>
+                  <button
+                    className="sync-copy-btn"
+                    onClick={() => navigator.clipboard.writeText(syncCode)}
+                  >コピー</button>
+                </div>
+                <p className="sync-hint">他の端末でこのコードを入力すると同期されます</p>
+                {lastSynced && (
+                  <p className="sync-last">最終同期: {lastSynced.toLocaleTimeString()}</p>
+                )}
+                <button
+                  className="sync-pull-btn"
+                  disabled={syncStatus === 'loading'}
+                  onClick={() => {
+                    setSyncStatus('loading');
+                    cloudLoad(syncCode!).then((data) => {
+                      if (data) { setGraph(data); saveGraph(data); setLastSynced(new Date()); }
+                      setSyncStatus('idle');
+                    }).catch(() => setSyncStatus('error'));
+                  }}
+                >↓ 今すぐ取得</button>
+                <button className="sync-disconnect-btn" onClick={disconnectSync}>
+                  同期を解除
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="sync-hint">新しいコードを作るか、既存のコードを入力してください</p>
+                <button
+                  className="sync-new-btn"
+                  onClick={() => activateCode(generateCode())}
+                >新しいコードを作成</button>
+                <div className="sync-input-row">
+                  <input
+                    className="sync-input"
+                    placeholder="コードを入力 (例: ABCD1234)"
+                    value={syncInput}
+                    onChange={(e) => setSyncInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => e.key === 'Enter' && activateCode(syncInput)}
+                  />
+                  <button
+                    className="sync-connect-btn"
+                    onClick={() => activateCode(syncInput)}
+                  >接続</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
