@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Book, GraphData, Relationship, RelationshipType } from './types';
 import { loadGraph, saveGraph } from './lib/storage';
-import { dedupeRelationships, detectRelationships } from './lib/relationships';
+import { dedupeRelationships, detectRelationships, detectAllRelationships } from './lib/relationships';
 import { BookGraph } from './components/BookGraph';
 import { BookSearch } from './components/BookSearch';
 import { BookSidebar } from './components/BookSidebar';
@@ -335,6 +335,22 @@ export default function App() {
     setSidebarBookId(null);
   }
 
+  function autoDetectRelationships() {
+    const newRels = detectAllRelationships(graph.books, enabledTypes);
+    const existingIds = new Set(graph.relationships.map((r) => r.id));
+    const added = newRels.filter((r) => !existingIds.has(r.id));
+    if (added.length === 0) {
+      setImportMessage('新しい関係は見つかりませんでした');
+    } else {
+      updateGraph((prev) => ({
+        ...prev,
+        relationships: dedupeRelationships([...prev.relationships, ...added]),
+      }));
+      setImportMessage(`${added.length} 件の関係を追加しました`);
+    }
+    setTimeout(() => setImportMessage(''), 3000);
+  }
+
   function toggleType(type: RelationshipType) {
     setEnabledTypes((prev) => {
       const next = new Set(prev);
@@ -445,6 +461,11 @@ export default function App() {
             onClick={() => setGroupByAuthor((v) => !v)}
           >
             著者でまとめる
+          </button>
+        )}
+        {graph.books.length > 1 && (
+          <button className="btn-auto-detect" onClick={autoDetectRelationships}>
+            関係を自動検出
           </button>
         )}
         {graph.books.length > 0 && (
@@ -576,6 +597,7 @@ export default function App() {
             </div>
           ) : (
             <BookGraph
+              key={`${groupByAuthor ? 'author' : 'grid'}-${layoutKey}`}
               data={graph}
               enabledTypes={enabledTypes}
               selectedId={selectedId}

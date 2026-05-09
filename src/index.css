@@ -47,6 +47,17 @@ body {
 }
 .btn-group-author:hover { background: #1e3a5f; border-color: #3B82F6; color: #93C5FD; }
 .btn-group-author.active { background: #1e3a5f; border-color: #3B82F6; color: #93C5FD; }
+.btn-auto-detect {
+  padding: 7px 12px;
+  background: #0c1a2e;
+  border: 1px solid #3B82F6;
+  border-radius: 6px;
+  color: #93C5FD;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-auto-detect:hover { background: #1e3a5f; }
 .btn-clear-all {
   padding: 7px 12px;
   background: #1e0a0a;

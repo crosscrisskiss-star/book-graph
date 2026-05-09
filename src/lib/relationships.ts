@@ -81,3 +81,77 @@ export function dedupeRelationships(rels: Relationship[]): Relationship[] {
     return true;
   });
 }
+
+export function detectAllRelationships(
+  books: Book[],
+  enabledTypes: Set<RelationshipType>
+): Relationship[] {
+  const rels: Relationship[] = [];
+
+  for (let i = 0; i < books.length; i++) {
+    for (let j = i + 1; j < books.length; j++) {
+      const a = books[i];
+      const b = books[j];
+
+      if (enabledTypes.has('author')) {
+        const aKeys = list(a.authorKeys);
+        const bKeys = list(b.authorKeys);
+        const sharedKeys = aKeys.length > 0 && bKeys.length > 0
+          ? aKeys.filter((k) => bKeys.includes(k))
+          : [];
+
+        // Fallback: match by author name string when no authorKeys
+        const aNames = list(a.authors).map((n) => n.trim().toLowerCase()).filter(Boolean);
+        const bNames = list(b.authors).map((n) => n.trim().toLowerCase()).filter(Boolean);
+        const sharedNames = aNames.length > 0 && bNames.length > 0
+          ? aNames.filter((n) => bNames.includes(n))
+          : [];
+
+        if (sharedKeys.length > 0 || sharedNames.length > 0) {
+          rels.push({
+            id: relId(a.id, b.id, 'author'),
+            source: a.id,
+            target: b.id,
+            type: 'author',
+            label: list(a.authors)[0],
+          });
+        }
+      }
+
+      if (enabledTypes.has('series')) {
+        const sharedSeries = list(a.series).filter((s) => list(b.series).includes(s));
+        if (sharedSeries.length > 0) {
+          rels.push({
+            id: relId(a.id, b.id, 'series'),
+            source: a.id,
+            target: b.id,
+            type: 'series',
+            label: sharedSeries[0],
+          });
+        }
+      }
+
+      if (enabledTypes.has('genre') || enabledTypes.has('theme')) {
+        const aSubjects = list(a.subjects);
+        const bSubjectsLower = list(b.subjects).map((s) => s.toLowerCase());
+        const sharedSubjects = aSubjects.filter((s) =>
+          bSubjectsLower.includes(s.toLowerCase())
+        );
+        if (sharedSubjects.length >= 2) {
+          const type: RelationshipType = sharedSubjects.length >= 4 ? 'theme' : 'genre';
+          if (enabledTypes.has(type)) {
+            rels.push({
+              id: relId(a.id, b.id, type),
+              source: a.id,
+              target: b.id,
+              type,
+              label: sharedSubjects.slice(0, 2).join(', '),
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return rels;
+}
