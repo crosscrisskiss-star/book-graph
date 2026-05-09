@@ -2,9 +2,11 @@ import { useState } from 'react';
 import type { Book, Relationship, RelationshipType } from '../types';
 import { REL_LABELS } from '../types';
 import { getBooksByAuthor, getBooksBySubject } from '../lib/openLibrary';
-import { getBooksByAuthorNDL, getBooksBySubjectNDL } from '../lib/ndl';
+import { getBooksByAuthorNDL, getBooksBySubjectNDL, searchBooksNDL } from '../lib/ndl';
+import { searchBooksGoogle } from '../lib/googleBooks';
 import { booklogSearchUrl } from '../lib/booklogLink';
 import { LibraryPanel } from './LibraryPanel';
+import { getGeminiRecommendations } from '../lib/gemini';
 
 function amazonUrl(book: Book): string {
   const isbn = book.isbn?.replace(/[-\s]/g, '');
@@ -120,40 +122,37 @@ export function BookSidebar({
     setAddingRec(true);
     setRecMessage('');
     try {
-      const isNDL = book.id.startsWith('ndl_');
       const existingIds = new Set(allBooks.map((b) => b.id));
-      let candidates: Book[] = [];
 
-      // 著者 → サブジェクトの順で候補を集める
-      if (authors.length > 0) {
-        const byAuthor = isNDL
-          ? await getBooksByAuthorNDL(authors[0])
-          : await getBooksByAuthor(authorKeys[0] ?? authors[0]);
-        candidates.push(...byAuthor);
-      }
-      if (candidates.filter((c) => !existingIds.has(c.id) && c.id !== book.id).length < 2 && subjects.length > 0) {
-        const bySubject = isNDL
-          ? await getBooksBySubjectNDL(subjects[0])
-          : await getBooksBySubject(subjects[0]);
-        candidates.push(...bySubject);
-      }
+      const recs = await getGeminiRecommendations(
+        book.title,
+        authors[0] ?? '',
+        subjects
+      );
 
-      // 未追加の本を最大2冊選ぶ
-      const picks: Book[] = [];
-      const seen = new Set<string>();
-      for (const c of candidates) {
-        if (picks.length >= 2) break;
-        if (existingIds.has(c.id) || c.id === book.id || seen.has(c.id)) continue;
-        seen.add(c.id);
-        picks.push(c);
-      }
+      let added = 0;
+      for (const rec of recs.slice(0, 2)) {
+        // NDL → Google Books の順で探す
+        const ndlResults = await searchBooksNDL(rec.title);
+        const ndlMatch = ndlResults.find((b) => !existingIds.has(b.id) && b.id !== book.id);
 
-      for (const picked of picks) {
-        onAddBook(picked);
-        onAddRelationship({ source: book.id, target: picked.id, type: 'recommendation' });
+        let found: Book | null = ndlMatch ?? null;
+        if (!found) {
+          const googleResults = await searchBooksGoogle(rec.title, 5);
+          found = googleResults.find((b) => !existingIds.has(b.id) && b.id !== book.id) ?? null;
+        }
+
+        if (found) {
+          onAddBook(found);
+          onAddRelationship({ source: book.id, target: found.id, type: 'recommendation' });
+          existingIds.add(found.id);
+          added++;
+        }
       }
 
-      setRecMessage(TEXT.recommend2Done(picks.length));
+      setRecMessage(TEXT.recommend2Done(added));
+    } catch (e) {
+      setRecMessage(e instanceof Error ? e.message : 'エラーが発生しました');
     } finally {
       setAddingRec(false);
     }
