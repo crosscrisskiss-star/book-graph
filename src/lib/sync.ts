@@ -1,42 +1,26 @@
-/// <reference types="vite/client" />
 import type { GraphData } from '../types';
 
-const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-
 export function isSyncConfigured(): boolean {
-  return Boolean(URL_ && KEY);
-}
-
-async function rest(path: string, options?: RequestInit): Promise<Response> {
-  const res = await fetch(`${URL_}/rest/v1${path}`, {
-    ...options,
-    headers: {
-      apikey: KEY!,
-      Authorization: `Bearer ${KEY}`,
-      'Content-Type': 'application/json',
-      ...(options?.headers ?? {}),
-    },
-  });
-  return res;
+  return true;
 }
 
 export async function cloudLoad(code: string): Promise<GraphData | null> {
-  const res = await rest(`/graphs?code=eq.${encodeURIComponent(code)}&select=data`);
+  const res = await fetch(`/api/sync?code=${encodeURIComponent(code)}`);
+  if (res.status === 503) return null;
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`load ${res.status}: ${body}`);
   }
-  const rows: { data: GraphData }[] = await res.json();
-  return rows[0]?.data ?? null;
+  return res.json();
 }
 
 export async function cloudSave(code: string, graph: GraphData): Promise<void> {
-  const res = await rest('/graphs', {
+  const res = await fetch(`/api/sync?code=${encodeURIComponent(code)}`, {
     method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates' } as Record<string, string>,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code, data: graph }),
   });
+  if (res.status === 503) throw new Error('sync not configured on server');
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`save ${res.status}: ${body}`);
