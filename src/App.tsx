@@ -42,13 +42,10 @@ function relId(source: string, target: string, type: RelationshipType): string {
 interface BookListProps {
   books: Book[];
   selectedId: string | null;
-  addingRecId: string | null;
   onSelect: (id: string) => void;
-  onRemove: (id: string) => void;
-  onRecommend2: (book: Book) => void;
 }
 
-function BookList({ books, selectedId, addingRecId, onSelect, onRemove, onRecommend2 }: BookListProps) {
+function BookList({ books, selectedId, onSelect }: BookListProps) {
   if (books.length === 0) return null;
 
   return (
@@ -56,10 +53,7 @@ function BookList({ books, selectedId, addingRecId, onSelect, onRemove, onRecomm
       <div className="panel-title">{TEXT.listTitle}</div>
       <div className="book-list">
         {books.map((book) => (
-          <div
-            key={book.id}
-            className={`book-list-item${book.id === selectedId ? ' selected' : ''}`}
-          >
+          <div key={book.id} className={`book-list-item${book.id === selectedId ? ' selected' : ''}`}>
             <button
               className={`book-list-main${book.read ? ' read' : ''}`}
               onClick={() => onSelect(book.id)}
@@ -68,21 +62,6 @@ function BookList({ books, selectedId, addingRecId, onSelect, onRemove, onRecomm
               {book.authors?.[0] && (
                 <span className="book-list-author">{book.authors[0]}</span>
               )}
-            </button>
-            <button
-              className="book-list-rec2"
-              title={TEXT.recommend2}
-              disabled={addingRecId === book.id}
-              onClick={() => onRecommend2(book)}
-            >
-              {addingRecId === book.id ? TEXT.recommend2Adding : TEXT.recommend2}
-            </button>
-            <button
-              className="book-list-delete"
-              title={TEXT.deleteBook}
-              onClick={() => onRemove(book.id)}
-            >
-              {TEXT.deleteBook}
             </button>
           </div>
         ))}
@@ -358,10 +337,7 @@ export default function App() {
               <BookList
                 books={graph.books}
                 selectedId={selectedId}
-                addingRecId={addingRecId}
                 onSelect={setSelectedId}
-                onRemove={removeBook}
-                onRecommend2={addRecommend2}
               />
             </>
           )}

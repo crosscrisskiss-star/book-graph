@@ -5,10 +5,11 @@ body {
   background: #0F172A;
   color: #F1F5F9;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
-#root { height: 100vh; display: flex; flex-direction: column; }
+#root { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
 
 /* Header */
 .header {
@@ -48,7 +49,7 @@ body {
 .import-message { font-size: 12px; color: #86efac; }
 
 /* Main layout */
-.app { height: 100vh; display: flex; flex-direction: column; }
+.app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
 .main { display: flex; flex: 1; overflow: hidden; position: relative; }
 
 .left-panel {
@@ -107,10 +108,7 @@ body {
   gap: 8px;
 }
 .book-list-item {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 4px;
-  align-items: stretch;
+  display: flex;
 }
 .book-list-item.selected .book-list-main {
   border-color: #F59E0B;
@@ -269,13 +267,17 @@ body {
 
 /* Sidebar */
 .sidebar {
-  width: 240px;
-  flex-shrink: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 260px;
+  z-index: 15;
   background: #1E293B;
   border-left: 1px solid #334155;
   padding: 14px;
   overflow-y: auto;
-  position: relative;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.4);
 }
 .sidebar-close {
   position: absolute; top: 8px; right: 10px;
@@ -462,13 +464,17 @@ body {
 
 /* Library panel */
 .library-panel {
-  width: 240px;
-  flex-shrink: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 260px;
+  z-index: 15;
   background: #1E293B;
   border-left: 1px solid #334155;
   padding: 14px;
   overflow-y: auto;
-  position: relative;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.4);
 }
 .library-panel-header {
   display: flex;

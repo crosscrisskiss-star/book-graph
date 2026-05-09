@@ -32,26 +32,16 @@ function coverForBook(book: Book): string | undefined {
 }
 
 function generatedCoverForBook(book: Book): string {
-  const author = book.authors?.[0] ?? '';
-  const title = book.title.length > 32 ? `${book.title.slice(0, 30)}...` : book.title;
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="240" height="340" viewBox="0 0 240 340">
-      <defs>
-        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#1d4ed8"/>
-          <stop offset="1" stop-color="#0f172a"/>
-        </linearGradient>
-      </defs>
-      <rect width="240" height="340" rx="12" fill="url(#g)"/>
-      <rect x="18" y="18" width="204" height="304" rx="8" fill="none" stroke="#93c5fd" stroke-width="3" opacity=".55"/>
-      <text x="120" y="130" fill="#f8fafc" font-family="sans-serif" font-size="24" font-weight="700" text-anchor="middle">
-        ${escapeXml(title)}
-      </text>
-      <text x="120" y="238" fill="#bfdbfe" font-family="sans-serif" font-size="16" text-anchor="middle">
-        ${escapeXml(author)}
-      </text>
-    </svg>
-  `;
+  const t = book.title;
+  const line1 = t.slice(0, 7);
+  const line2 = t.length > 7 ? t.slice(7, 13) + (t.length > 13 ? '…' : '') : '';
+  const y1 = line2 ? 38 : 48;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="68" height="96" viewBox="0 0 68 96">
+    <rect width="68" height="96" rx="4" fill="#1e3a5f"/>
+    <rect x="2" y="2" width="64" height="92" rx="3" fill="none" stroke="#60a5fa" stroke-width="1" opacity=".6"/>
+    <text x="34" y="${y1}" fill="#f8fafc" font-family="sans-serif" font-size="9" font-weight="700" text-anchor="middle" dominant-baseline="middle">${escapeXml(line1)}</text>
+    ${line2 ? `<text x="34" y="${y1 + 14}" fill="#f8fafc" font-family="sans-serif" font-size="9" font-weight="700" text-anchor="middle" dominant-baseline="middle">${escapeXml(line2)}</text>` : ''}
+  </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
@@ -63,11 +53,9 @@ function escapeXml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function nodeLabel(title: string, author?: string): string {
-  const t = title.length > 18 ? `${title.slice(0, 16)}...` : title;
-  if (!author) return t;
-  const a = author.length > 14 ? `${author.slice(0, 12)}...` : author;
-  return `${t}\n${a}`;
+function nodeAuthorLabel(author?: string): string {
+  if (!author) return '';
+  return author.length > 14 ? `${author.slice(0, 12)}…` : author;
 }
 
 export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNodeMenu, layoutKey }: Props) {
@@ -87,13 +75,13 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
             'border-width': 2,
             'border-color': '#475569',
             label: 'data(label)',
-            color: '#F1F5F9',
-            'font-size': 11,
+            color: '#94A3B8',
+            'font-size': 10,
             'text-valign': 'bottom',
             'text-halign': 'center',
-            'text-margin-y': 4,
+            'text-margin-y': 3,
             'text-wrap': 'wrap',
-            'text-max-width': '100px',
+            'text-max-width': '80px',
             width: 68,
             height: 96,
             shape: 'round-rectangle',
@@ -189,7 +177,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
       const cover = coverForBook(book);
       if (existingNodeIds.has(book.id)) {
         const node = cy.getElementById(book.id);
-        node.data('label', nodeLabel(book.title, book.authors?.[0]));
+        node.data('label', nodeAuthorLabel(book.authors?.[0]));
         node.data('read', book.read ?? false);
         if (cover) node.data('cover', cover);
         else node.removeData('cover');
@@ -197,7 +185,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
         added.push({
           data: {
             id: book.id,
-            label: nodeLabel(book.title, book.authors?.[0]),
+            label: nodeAuthorLabel(book.authors?.[0]),
             read: book.read ?? false,
             ...(cover ? { cover } : {}),
           },
