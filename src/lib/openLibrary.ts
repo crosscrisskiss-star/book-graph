@@ -14,7 +14,7 @@ interface OLSearchDoc {
 }
 
 function coverUrl(id?: number): string | undefined {
-  return id ? `https://covers.openlibrary.org/b/id/${id}-M.jpg` : undefined;
+  return id ? `/api/ol-cover/b/id/${id}-M.jpg` : undefined;
 }
 
 function workId(key: string): string {

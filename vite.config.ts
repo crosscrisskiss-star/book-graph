@@ -30,6 +30,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/google-cover/, ''),
       },
+      '/api/ol-cover': {
+        target: 'https://covers.openlibrary.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/ol-cover/, ''),
+      },
       '/api/books-cover': {
         target: 'https://thumbnail-s.images.books.or.jp',
         changeOrigin: true,

@@ -19,6 +19,10 @@
     {
       "source": "/api/google-cover/:path*",
       "destination": "https://books.google.com/:path*"
+    },
+    {
+      "source": "/api/ol-cover/:path*",
+      "destination": "https://covers.openlibrary.org/:path*"
     }
   ]
 }

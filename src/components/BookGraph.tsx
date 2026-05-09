@@ -16,7 +16,7 @@ interface Props {
   layoutKey: number;
 }
 
-function coverForBook(book: Book): string | undefined {
+function coverForBook(book: Book): string {
   if (book.coverUrl?.startsWith('https://cover.openbd.jp/')) {
     return book.coverUrl.replace('https://cover.openbd.jp', '/api/openbd-cover');
   }
@@ -26,7 +26,15 @@ function coverForBook(book: Book): string | undefined {
   if (book.coverUrl?.startsWith('https://thumbnail-s.images.books.or.jp/')) {
     return book.coverUrl.replace('https://thumbnail-s.images.books.or.jp', '/api/books-cover');
   }
+  if (book.coverUrl?.startsWith('https://covers.openlibrary.org/')) {
+    return book.coverUrl.replace('https://covers.openlibrary.org', '/api/ol-cover');
+  }
+  if (book.coverUrl?.startsWith('https://ndlsearch.ndl.go.jp/thumbnail/')) {
+    return book.coverUrl.replace('https://ndlsearch.ndl.go.jp/thumbnail', '/api/ndl-thumbnail');
+  }
+  // Already a relative/proxy URL or data URI
   if (book.coverUrl) return book.coverUrl;
+  // Fallback: books.or.jp by ISBN (edge fn returns SVG placeholder on 404)
   const isbn = book.isbn?.replace(/[-\s]/g, '');
   return isbn ? `/api/books-cover/${isbn}.jpg` : generatedCoverForBook(book);
 }
@@ -181,15 +189,14 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNode
         const node = cy.getElementById(book.id);
         node.data('label', nodeLabel(book.title, book.authors?.[0]));
         node.data('read', book.read ?? false);
-        if (cover) node.data('cover', cover);
-        else node.removeData('cover');
+        node.data('cover', cover);
       } else {
         added.push({
           data: {
             id: book.id,
             label: nodeLabel(book.title, book.authors?.[0]),
             read: book.read ?? false,
-            ...(cover ? { cover } : {}),
+            cover,
           },
         });
       }
