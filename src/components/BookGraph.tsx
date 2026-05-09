@@ -98,7 +98,7 @@ function syncPhantom(cy: cytoscape.Core, bookId: string) {
   }
 }
 
-const BOOK_NODE_SELECTOR = ':not(.author-phantom):not(.author-group)';
+const BOOK_NODE_SELECTOR = '.book-node';
 
 function runLayout(cy: cytoscape.Core, duration = 1500, randomize = false) {
   cy.elements(`node${BOOK_NODE_SELECTOR}, node.author-group, edge:not(.hidden)`).layout({
@@ -302,6 +302,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
 
       if (existingNodeIds.has(book.id)) {
         const node = cy.getElementById(book.id);
+        node.addClass('book-node');
         node.data('label', nodeTitle(book.title));
         node.data('read', book.read ?? false);
         node.data('phantomY', py);
@@ -310,6 +311,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
       } else {
         added.push({
           data: { id: book.id, label: nodeTitle(book.title), read: book.read ?? false, cover: generated, phantomY: py },
+          classes: 'book-node',
         });
         added.push({
           data: { id: phantomId(book.id), label: nodeAuthor(book.authors?.[0]) },
