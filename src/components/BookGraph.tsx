@@ -89,17 +89,17 @@ function nodeLabel(book: Book): string {
   return author ? `${title}\n${author}` : title;
 }
 
-function runLayout(cy: cytoscape.Core, duration = 1700, randomize = false) {
+function runLayout(cy: cytoscape.Core, duration = 1700) {
   const eles = cy.elements().filter((ele) => {
     if (ele.isNode()) return ele.hasClass('book-node') || ele.hasClass('author-group');
     if (ele.isEdge()) return !ele.hasClass('hidden');
     return false;
   });
 
-  eles.layout({
+  const layoutInst = eles.layout({
     name: 'cola',
     animate: true,
-    randomize,
+    randomize: false,
     avoidOverlap: true,
     handleDisconnected: true,
     maxSimulationTime: duration,
@@ -108,11 +108,21 @@ function runLayout(cy: cytoscape.Core, duration = 1700, randomize = false) {
     unconstrIter: 30,
     userConstIter: 35,
     allConstIter: 35,
-    stop: () => {
-      const nodes = cy.nodes('.book-node').add(cy.nodes('.author-group'));
-      if (nodes.length > 0) cy.fit(nodes, 48);
-    },
-  } as Parameters<typeof cy.layout>[0]).run();
+  } as Parameters<typeof cy.layout>[0]);
+
+  layoutInst.one('layoutstop', () => {
+    if (cy.destroyed()) return;
+    const nodes = cy.nodes('.book-node, .author-group');
+    if (nodes.length > 0) cy.fit(nodes, 48);
+  });
+
+  layoutInst.run();
+}
+
+function gridLayout(cy: cytoscape.Core) {
+  const nodes = cy.nodes(BOOK_NODE_SELECTOR);
+  if (nodes.length === 0) return;
+  (nodes.layout({ name: 'grid', fit: true, animate: false, padding: 48 } as Parameters<typeof cy.layout>[0])).run();
 }
 
 
@@ -313,7 +323,7 @@ export function BookGraph({
     if (added.length > 0) {
       cy.add(added);
       if (!groupByAuthorRef.current) {
-        cy.nodes(BOOK_NODE_SELECTOR).layout({ name: 'grid', fit: true, animate: false, padding: 48 } as Parameters<typeof cy.layout>[0]).run();
+        gridLayout(cy);
       }
     }
 
@@ -419,29 +429,26 @@ export function BookGraph({
           clusterIndex++;
         });
 
-        // Singles (no author or only 1 book per author) go below clusters
+        // Books with 1 author book + books with no author go below clusters
         const singleRowY = Math.ceil(groupDefs.length / clusterCols) * clusterGapY + 40;
         let singleIndex = 0;
-        authorMap.forEach((ids) => {
-          if (ids.length >= 2) return;
-          ids.forEach((bookId) => {
-            const node = cy.getElementById(bookId);
-            if (!node.length) return;
-            node.position({
-              x: (singleIndex % 5) * itemGapX,
-              y: singleRowY + Math.floor(singleIndex / 5) * itemGapY,
-            });
-            singleIndex++;
+        const groupedIds = new Set<string>();
+        authorMap.forEach((ids) => { if (ids.length >= 2) ids.forEach((id) => groupedIds.add(id)); });
+
+        cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+          if (groupedIds.has(node.id())) return;
+          node.position({
+            x: (singleIndex % 6) * itemGapX,
+            y: singleRowY + Math.floor(singleIndex / 6) * itemGapY,
           });
+          singleIndex++;
         });
       });
 
       const visibleNodes = cy.nodes('.book-node').add(cy.nodes('.author-group'));
       if (visibleNodes.length > 0) cy.fit(visibleNodes, 48);
     } else if (groupByAuthorChanged) {
-      if (cy.nodes(BOOK_NODE_SELECTOR).length > 0) {
-        cy.nodes(BOOK_NODE_SELECTOR).layout({ name: 'grid', fit: true, animate: false, padding: 48 } as Parameters<typeof cy.layout>[0]).run();
-      }
+      gridLayout(cy);
     }
     // If groupByAuthor is false and unchanged, the data.books effect handles layout
   }, [groupByAuthor, data.books]);
@@ -449,7 +456,8 @@ export function BookGraph({
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy || cy.nodes(BOOK_NODE_SELECTOR).length === 0 || layoutKey === 0) return;
-    runLayout(cy, 1800, true);
+    gridLayout(cy);
+    runLayout(cy, 1800);
   }, [layoutKey]);
 
   useEffect(() => {
