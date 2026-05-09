@@ -313,10 +313,7 @@ export function BookGraph({
     if (added.length > 0) {
       cy.add(added);
       if (!groupByAuthorRef.current) {
-        const bookNodes = cy.nodes(BOOK_NODE_SELECTOR);
-        // Immediately position in a grid so nodes are visible before cola animates
-        bookNodes.layout({ name: 'grid', fit: true, animate: false } as Parameters<typeof cy.layout>[0]).run();
-        runLayout(cy, 1700, false);
+        cy.nodes(BOOK_NODE_SELECTOR).layout({ name: 'grid', fit: true, animate: false, padding: 48 } as Parameters<typeof cy.layout>[0]).run();
       }
     }
 
@@ -442,9 +439,8 @@ export function BookGraph({
       const visibleNodes = cy.nodes('.book-node').add(cy.nodes('.author-group'));
       if (visibleNodes.length > 0) cy.fit(visibleNodes, 48);
     } else if (groupByAuthorChanged) {
-      // groupByAuthor toggled OFF: re-layout from scratch
       if (cy.nodes(BOOK_NODE_SELECTOR).length > 0) {
-        runLayout(cy, 1600, true);
+        cy.nodes(BOOK_NODE_SELECTOR).layout({ name: 'grid', fit: true, animate: false, padding: 48 } as Parameters<typeof cy.layout>[0]).run();
       }
     }
     // If groupByAuthor is false and unchanged, the data.books effect handles layout

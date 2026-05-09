@@ -328,6 +328,13 @@ export default function App() {
     if (sidebarBookId === id) setSidebarBookId(null);
   }
 
+  function removeAllBooks() {
+    if (!window.confirm(`全 ${graph.books.length} 冊を削除しますか？`)) return;
+    updateGraph(() => ({ books: [], relationships: [] }));
+    setSelectedId(null);
+    setSidebarBookId(null);
+  }
+
   function toggleType(type: RelationshipType) {
     setEnabledTypes((prev) => {
       const next = new Set(prev);
@@ -438,6 +445,11 @@ export default function App() {
             onClick={() => setGroupByAuthor((v) => !v)}
           >
             著者でまとめる
+          </button>
+        )}
+        {graph.books.length > 0 && (
+          <button className="btn-clear-all" onClick={removeAllBooks}>
+            全削除
           </button>
         )}
         {isSyncConfigured() && (
