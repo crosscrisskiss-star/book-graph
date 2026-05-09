@@ -597,7 +597,6 @@ export default function App() {
             </div>
           ) : (
             <BookGraph
-              key={`${groupByAuthor ? 'author' : 'grid'}-${layoutKey}`}
               data={graph}
               enabledTypes={enabledTypes}
               selectedId={selectedId}

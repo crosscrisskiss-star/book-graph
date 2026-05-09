@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import cytoscape from 'cytoscape';
-// @ts-expect-error no types bundled
-import cola from 'cytoscape-cola';
 import type { Book, GraphData, RelationshipType } from '../types';
 import { REL_COLORS } from '../types';
-
-cytoscape.use(cola);
 
 interface Props {
   data: GraphData;
@@ -77,10 +73,6 @@ function escapeXml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function groupNodeId(author: string): string {
-  return `author_group::${author}`;
-}
-
 function nodeLabel(book: Book): string {
   const title = book.title.length > 15 ? `${book.title.slice(0, 14)}...` : book.title;
   const author = book.authors?.[0]
@@ -89,42 +81,100 @@ function nodeLabel(book: Book): string {
   return author ? `${title}\n${author}` : title;
 }
 
-function runLayout(cy: cytoscape.Core, duration = 1700) {
-  const eles = cy.elements().filter((ele) => {
-    if (ele.isNode()) return ele.hasClass('book-node') || ele.hasClass('author-group');
-    if (ele.isEdge()) return !ele.hasClass('hidden');
-    return false;
-  });
-
-  const layoutInst = eles.layout({
-    name: 'cola',
-    animate: true,
-    randomize: false,
-    avoidOverlap: true,
-    handleDisconnected: true,
-    maxSimulationTime: duration,
-    nodeSpacing: () => 112,
-    edgeLength: () => 250,
-    unconstrIter: 30,
-    userConstIter: 35,
-    allConstIter: 35,
-  } as Parameters<typeof cy.layout>[0]);
-
-  layoutInst.one('layoutstop', () => {
-    if (cy.destroyed()) return;
-    const nodes = cy.nodes('.book-node, .author-group');
-    if (nodes.length > 0) cy.fit(nodes, 48);
-  });
-
-  layoutInst.run();
+function visibleGraphNodes(cy: cytoscape.Core): cytoscape.CollectionReturnValue {
+  return cy.nodes().filter((node) => node.hasClass('book-node'));
 }
 
-function gridLayout(cy: cytoscape.Core) {
+function fitVisible(cy: cytoscape.Core) {
+  cy.resize();
+  const nodes = visibleGraphNodes(cy);
+  if (nodes.length > 0) cy.fit(nodes, 48);
+}
+
+function applyGridLayout(cy: cytoscape.Core) {
   const nodes = cy.nodes(BOOK_NODE_SELECTOR);
   if (nodes.length === 0) return;
-  (nodes.layout({ name: 'grid', fit: true, animate: false, padding: 48 } as Parameters<typeof cy.layout>[0])).run();
+
+  const cols = Math.max(1, Math.ceil(Math.sqrt(nodes.length)));
+  const gapX = 170;
+  const gapY = 220;
+
+  cy.batch(() => {
+    nodes.forEach((node, index) => {
+      node.move({ parent: null });
+      node.position({
+        x: (index % cols) * gapX,
+        y: Math.floor(index / cols) * gapY,
+      });
+    });
+  });
+
+  fitVisible(cy);
 }
 
+function applyAuthorLayout(cy: cytoscape.Core, books: Book[]) {
+  cy.batch(() => {
+    cy.nodes(BOOK_NODE_SELECTOR).move({ parent: null });
+  });
+
+  const authorMap = new Map<string, string[]>();
+  for (const book of books) {
+    const author = book.authors?.[0]?.trim();
+    if (!author) continue;
+    if (!authorMap.has(author)) authorMap.set(author, []);
+    authorMap.get(author)!.push(book.id);
+  }
+
+  const groups: Array<{ author: string; ids: string[] }> = [];
+  const groupedIds = new Set<string>();
+  authorMap.forEach((ids, author) => {
+    if (ids.length >= 2) {
+      groups.push({ author, ids });
+      ids.forEach((id) => groupedIds.add(id));
+    }
+  });
+
+  const clusterCols = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, groups.length))));
+  const clusterGapX = 300;
+  const clusterGapY = 260;
+  const itemGapX = 112;
+  const itemGapY = 160;
+
+  cy.batch(() => {
+    groups.forEach(({ ids }, groupIndex) => {
+      const baseX = (groupIndex % clusterCols) * clusterGapX;
+      const baseY = Math.floor(groupIndex / clusterCols) * clusterGapY;
+      const cols = Math.min(3, Math.ceil(Math.sqrt(ids.length)));
+      const rows = Math.ceil(ids.length / cols);
+      const startX = baseX - ((cols - 1) * itemGapX) / 2;
+      const startY = baseY - ((rows - 1) * itemGapY) / 2 + 18;
+
+      ids.forEach((bookId, index) => {
+        const node = cy.getElementById(bookId);
+        if (!node.length) return;
+        node.move({ parent: null });
+        node.position({
+          x: startX + (index % cols) * itemGapX,
+          y: startY + Math.floor(index / cols) * itemGapY,
+        });
+      });
+    });
+
+    const singleStartY = Math.ceil(groups.length / clusterCols) * clusterGapY + 48;
+    let singleIndex = 0;
+    cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+      if (groupedIds.has(node.id())) return;
+      node.move({ parent: null });
+      node.position({
+        x: (singleIndex % 5) * itemGapX,
+        y: singleStartY + Math.floor(singleIndex / 5) * itemGapY,
+      });
+      singleIndex += 1;
+    });
+  });
+
+  fitVisible(cy);
+}
 
 export function BookGraph({
   data,
@@ -138,19 +188,35 @@ export function BookGraph({
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
   const groupByAuthorRef = useRef(groupByAuthor);
-  const prevGroupByAuthorRef = useRef(groupByAuthor);
+  const onSelectBookRef = useRef(onSelectBook);
   const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    onSelectBookRef.current = onSelectBook;
+  }, [onSelectBook]);
 
   useEffect(() => {
     groupByAuthorRef.current = groupByAuthor;
   }, [groupByAuthor]);
 
+  const applyCurrentLayout = useCallback(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    if (groupByAuthorRef.current) applyAuthorLayout(cy, data.books);
+    else applyGridLayout(cy);
+    setZoom(cy.zoom());
+  }, [data.books]);
+
+  const scheduleLayout = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(applyCurrentLayout);
+    });
+  }, [applyCurrentLayout]);
+
   const handleResetZoom = useCallback(() => {
     const cy = cyRef.current;
     if (!cy) return;
-    const nodes = cy.nodes('.book-node, .author-group');
-    if (nodes.length > 0) cy.fit(nodes, 48);
-    else cy.fit();
+    fitVisible(cy);
     setZoom(cy.zoom());
   }, []);
 
@@ -184,26 +250,6 @@ export function BookGraph({
             height: 142,
             shape: 'round-rectangle',
             'background-opacity': 1,
-          },
-        },
-        {
-          selector: 'node.author-group',
-          style: {
-            'background-color': '#0F172A',
-            'background-opacity': 0.9,
-            'border-color': '#3B82F6',
-            'border-width': 2,
-            label: 'data(label)',
-            color: '#93C5FD',
-            'font-size': 12,
-            'font-weight': 700,
-            'text-valign': 'top',
-            'text-halign': 'center',
-            'text-margin-y': 8,
-            'text-wrap': 'wrap',
-            'text-max-width': '220px',
-            padding: '28px',
-            shape: 'round-rectangle',
           },
         },
         {
@@ -250,18 +296,18 @@ export function BookGraph({
           style: { display: 'none' },
         },
       ],
-      layout: { name: 'grid' },
+      layout: { name: 'preset' },
     });
 
     cy.on('zoom', () => setZoom(cy.zoom()));
-    cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (event) => onSelectBook(event.target.id()));
+    cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (event) => onSelectBookRef.current(event.target.id()));
 
     cyRef.current = cy;
     return () => {
       cy.destroy();
       cyRef.current = null;
     };
-  }, [onSelectBook]);
+  }, []);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -270,9 +316,12 @@ export function BookGraph({
     let cancelled = false;
     const existingNodeIds = new Set(cy.nodes(BOOK_NODE_SELECTOR).map((node) => node.id()));
     const newBookIds = new Set(data.books.map((book) => book.id));
+    let changed = false;
 
     cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
-      if (!newBookIds.has(node.id())) node.remove();
+      if (newBookIds.has(node.id())) return;
+      node.remove();
+      changed = true;
     });
 
     function asyncLoadCover(bookId: string, proxyUrl: string, fallback: string) {
@@ -324,15 +373,15 @@ export function BookGraph({
 
     if (added.length > 0) {
       cy.add(added);
-      if (!groupByAuthorRef.current) {
-        gridLayout(cy);
-      }
+      changed = true;
     }
+
+    if (changed) scheduleLayout();
 
     return () => {
       cancelled = true;
     };
-  }, [data.books]);
+  }, [data.books, scheduleLayout]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -367,100 +416,8 @@ export function BookGraph({
   }, [data.relationships, enabledTypes]);
 
   useEffect(() => {
-    const cy = cyRef.current;
-    if (!cy) return;
-
-    const groupByAuthorChanged = prevGroupByAuthorRef.current !== groupByAuthor;
-    prevGroupByAuthorRef.current = groupByAuthor;
-
-    if (!groupByAuthor && !groupByAuthorChanged) return;
-
-    cy.nodes(BOOK_NODE_SELECTOR).move({ parent: null });
-    cy.nodes('.author-group').remove();
-
-    if (groupByAuthor) {
-      const authorMap = new Map<string, string[]>();
-      for (const book of data.books) {
-        const author = book.authors?.[0]?.trim();
-        if (!author) continue;
-        if (!authorMap.has(author)) authorMap.set(author, []);
-        authorMap.get(author)!.push(book.id);
-      }
-
-      const groupDefs: cytoscape.ElementDefinition[] = [];
-      authorMap.forEach((ids, author) => {
-        if (ids.length >= 2) {
-          groupDefs.push({ data: { id: groupNodeId(author), label: author }, classes: 'author-group' });
-        }
-      });
-
-      if (groupDefs.length > 0) {
-        cy.add(groupDefs);
-        authorMap.forEach((ids, author) => {
-          if (ids.length < 2) return;
-          const parent = groupNodeId(author);
-          ids.forEach((bookId) => {
-            const node = cy.getElementById(bookId);
-            if (node.length) node.move({ parent });
-          });
-        });
-      }
-
-      // Manually position books in clusters — compound nodes auto-size to fit children
-      const clusterCols = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, groupDefs.length))));
-      const clusterGapX = 380;
-      const clusterGapY = 320;
-      const itemGapX = 112;
-      const itemGapY = 166;
-      let clusterIndex = 0;
-
-      cy.batch(() => {
-        authorMap.forEach((ids, author) => {
-          if (ids.length < 2) return;
-          const baseX = (clusterIndex % clusterCols) * clusterGapX;
-          const baseY = Math.floor(clusterIndex / clusterCols) * clusterGapY;
-          const cols = Math.min(3, Math.ceil(Math.sqrt(ids.length)));
-          ids.forEach((bookId, i) => {
-            const node = cy.getElementById(bookId);
-            if (!node.length) return;
-            node.position({
-              x: baseX + (i % cols) * itemGapX,
-              y: baseY + Math.floor(i / cols) * itemGapY,
-            });
-          });
-          clusterIndex++;
-        });
-
-        // Books with 1 author book + books with no author go below clusters
-        const singleRowY = Math.ceil(groupDefs.length / clusterCols) * clusterGapY + 40;
-        let singleIndex = 0;
-        const groupedIds = new Set<string>();
-        authorMap.forEach((ids) => { if (ids.length >= 2) ids.forEach((id) => groupedIds.add(id)); });
-
-        cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
-          if (groupedIds.has(node.id())) return;
-          node.position({
-            x: (singleIndex % 6) * itemGapX,
-            y: singleRowY + Math.floor(singleIndex / 6) * itemGapY,
-          });
-          singleIndex++;
-        });
-      });
-
-      const visibleNodes = cy.nodes('.book-node').add(cy.nodes('.author-group'));
-      if (visibleNodes.length > 0) cy.fit(visibleNodes, 48);
-    } else if (groupByAuthorChanged) {
-      gridLayout(cy);
-    }
-    // If groupByAuthor is false and unchanged, the data.books effect handles layout
-  }, [groupByAuthor, data.books]);
-
-  useEffect(() => {
-    const cy = cyRef.current;
-    if (!cy || cy.nodes(BOOK_NODE_SELECTOR).length === 0 || layoutKey === 0) return;
-    gridLayout(cy);
-    runLayout(cy, 1800);
-  }, [layoutKey]);
+    scheduleLayout();
+  }, [groupByAuthor, layoutKey, scheduleLayout]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -472,7 +429,6 @@ export function BookGraph({
     const node = cy.getElementById(selectedId);
     if (!node.length) return;
     node.addClass('highlighted');
-    cy.animate({ center: { eles: node }, duration: 300, easing: 'ease-in-out-cubic' });
   }, [selectedId]);
 
   useEffect(() => {
@@ -483,7 +439,9 @@ export function BookGraph({
     const node = cy.getElementById(bookId);
     if (!node.length) return;
 
-    cy.animate({ center: { eles: node }, duration: 300, easing: 'ease-in-out-cubic' });
+    cy.zoom(1);
+    cy.center(node);
+    setZoom(1);
   }, [focusRequest]);
 
   return (
