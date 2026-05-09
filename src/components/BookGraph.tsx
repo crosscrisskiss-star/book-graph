@@ -192,8 +192,6 @@ export function BookGraph({
             'text-max-width': '220px',
             padding: '28px',
             shape: 'round-rectangle',
-            width: 'label',
-            height: 'label',
           },
         },
         {
@@ -314,7 +312,12 @@ export function BookGraph({
 
     if (added.length > 0) {
       cy.add(added);
-      if (!groupByAuthorRef.current) runLayout(cy, 1700, added.length > 1);
+      if (!groupByAuthorRef.current) {
+        const bookNodes = cy.nodes(BOOK_NODE_SELECTOR);
+        // Immediately position in a grid so nodes are visible before cola animates
+        bookNodes.layout({ name: 'grid', fit: true, animate: false } as Parameters<typeof cy.layout>[0]).run();
+        runLayout(cy, 1700, false);
+      }
     }
 
     return () => {
@@ -394,9 +397,50 @@ export function BookGraph({
         });
       }
 
-      if (cy.nodes(BOOK_NODE_SELECTOR).length > 0) {
-        runLayout(cy, 2000, true);
-      }
+      // Manually position books in clusters — compound nodes auto-size to fit children
+      const clusterCols = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, groupDefs.length))));
+      const clusterGapX = 380;
+      const clusterGapY = 320;
+      const itemGapX = 112;
+      const itemGapY = 166;
+      let clusterIndex = 0;
+
+      cy.batch(() => {
+        authorMap.forEach((ids, author) => {
+          if (ids.length < 2) return;
+          const baseX = (clusterIndex % clusterCols) * clusterGapX;
+          const baseY = Math.floor(clusterIndex / clusterCols) * clusterGapY;
+          const cols = Math.min(3, Math.ceil(Math.sqrt(ids.length)));
+          ids.forEach((bookId, i) => {
+            const node = cy.getElementById(bookId);
+            if (!node.length) return;
+            node.position({
+              x: baseX + (i % cols) * itemGapX,
+              y: baseY + Math.floor(i / cols) * itemGapY,
+            });
+          });
+          clusterIndex++;
+        });
+
+        // Singles (no author or only 1 book per author) go below clusters
+        const singleRowY = Math.ceil(groupDefs.length / clusterCols) * clusterGapY + 40;
+        let singleIndex = 0;
+        authorMap.forEach((ids) => {
+          if (ids.length >= 2) return;
+          ids.forEach((bookId) => {
+            const node = cy.getElementById(bookId);
+            if (!node.length) return;
+            node.position({
+              x: (singleIndex % 5) * itemGapX,
+              y: singleRowY + Math.floor(singleIndex / 5) * itemGapY,
+            });
+            singleIndex++;
+          });
+        });
+      });
+
+      const visibleNodes = cy.nodes('.book-node').add(cy.nodes('.author-group'));
+      if (visibleNodes.length > 0) cy.fit(visibleNodes, 48);
     } else if (groupByAuthorChanged) {
       // groupByAuthor toggled OFF: re-layout from scratch
       if (cy.nodes(BOOK_NODE_SELECTOR).length > 0) {
