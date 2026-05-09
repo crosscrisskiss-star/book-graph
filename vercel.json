@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/ndl/:path*",
+      "destination": "https://ndlsearch.ndl.go.jp/api/:path*"
+    },
+    {
+      "source": "/api/calil/:path*",
+      "destination": "https://api.calil.jp/:path*"
+    },
+    {
+      "source": "/api/openbd-cover/:path*",
+      "destination": "https://cover.openbd.jp/:path*"
+    },
+    {
+      "source": "/api/ndl-thumbnail/:path*",
+      "destination": "https://ndlsearch.ndl.go.jp/thumbnail/:path*"
+    },
+    {
+      "source": "/api/google-cover/:path*",
+      "destination": "https://books.google.com/:path*"
+    }
+  ]
+}
