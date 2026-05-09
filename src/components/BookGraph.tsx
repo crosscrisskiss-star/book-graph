@@ -12,6 +12,7 @@ interface Props {
   enabledTypes: Set<RelationshipType>;
   selectedId: string | null;
   onSelectBook: (id: string) => void;
+  onNodeMenu: (id: string, x: number, y: number) => void;
 }
 
 function coverForBook(book: Book): string | undefined {
@@ -68,7 +69,7 @@ function nodeLabel(title: string, author?: string): string {
   return `${t}\n${a}`;
 }
 
-export function BookGraph({ data, enabledTypes, selectedId, onSelectBook }: Props) {
+export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, onNodeMenu }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
@@ -155,7 +156,10 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook }: Prop
     });
 
     cy.on('tap', 'node', (e) => {
-      onSelectBook(e.target.id());
+      const id = e.target.id();
+      const pos = e.target.renderedPosition();
+      onSelectBook(id);
+      onNodeMenu(id, pos.x, pos.y);
     });
 
     cyRef.current = cy;

@@ -100,6 +100,8 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [addingRecId, setAddingRecId] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
+  const [nodeMenu, setNodeMenu] = useState<{ bookId: string; x: number; y: number } | null>(null);
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   function updateGraph(fn: (prev: GraphData) => GraphData) {
@@ -300,6 +302,7 @@ export default function App() {
     };
   }, [graph.books]);
 
+  const menuBook = nodeMenu ? (graph.books.find((b) => b.id === nodeMenu.bookId) ?? null) : null;
   const selectedBook = graph.books.find((book) => book.id === selectedId) ?? null;
   const existingIds = new Set(graph.books.map((book) => book.id));
 
@@ -335,19 +338,30 @@ export default function App() {
       )}
 
       <div className="main">
-        <aside className="left-panel">
-          <RelationshipFilter enabled={enabledTypes} onChange={toggleType} />
-          <BookList
-            books={graph.books}
-            selectedId={selectedId}
-            addingRecId={addingRecId}
-            onSelect={setSelectedId}
-            onRemove={removeBook}
-            onRecommend2={addRecommend2}
-          />
+        <aside className={`left-panel${showLeftPanel ? '' : ' collapsed'}`}>
+          <button
+            className="left-panel-toggle"
+            onClick={() => setShowLeftPanel((v) => !v)}
+            title={showLeftPanel ? 'パネルを隠す' : 'パネルを表示'}
+          >
+            {showLeftPanel ? '◀' : '▶'}
+          </button>
+          {showLeftPanel && (
+            <>
+              <RelationshipFilter enabled={enabledTypes} onChange={toggleType} />
+              <BookList
+                books={graph.books}
+                selectedId={selectedId}
+                addingRecId={addingRecId}
+                onSelect={setSelectedId}
+                onRemove={removeBook}
+                onRecommend2={addRecommend2}
+              />
+            </>
+          )}
         </aside>
 
-        <div className="graph-container">
+        <div className="graph-container" onClick={() => setNodeMenu(null)}>
           {graph.books.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">Book</div>
@@ -359,7 +373,35 @@ export default function App() {
               enabledTypes={enabledTypes}
               selectedId={selectedId}
               onSelectBook={setSelectedId}
+              onNodeMenu={(id, x, y) => setNodeMenu({ bookId: id, x, y })}
             />
+          )}
+          {nodeMenu && menuBook && (
+            <div
+              className="node-menu"
+              style={{ left: nodeMenu.x + 44, top: nodeMenu.y - 44 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                className="node-menu-item"
+                disabled={addingRecId === menuBook.id}
+                onClick={() => { addRecommend2(menuBook); setNodeMenu(null); }}
+              >
+                {addingRecId === menuBook.id ? '取得中...' : 'おすすめ2冊'}
+              </button>
+              <button
+                className={`node-menu-item${menuBook.read ? ' read' : ''}`}
+                onClick={() => { toggleRead(menuBook.id); setNodeMenu(null); }}
+              >
+                {menuBook.read ? '✓ 既読' : '○ 未読'}
+              </button>
+              <button
+                className="node-menu-item danger"
+                onClick={() => { removeBook(menuBook.id); setNodeMenu(null); }}
+              >
+                削除
+              </button>
+            </div>
           )}
         </div>
 

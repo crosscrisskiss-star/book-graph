@@ -46,7 +46,27 @@ body {
   background: #1E293B;
   border-right: 1px solid #334155;
   overflow-y: auto;
+  position: relative;
+  transition: width 0.2s;
 }
+.left-panel.collapsed {
+  width: 28px;
+  overflow: hidden;
+}
+.left-panel-toggle {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  z-index: 2;
+  background: none;
+  border: none;
+  color: #64748B;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.left-panel-toggle:hover { color: #F1F5F9; }
 
 /* Filter panel */
 .filter-panel {
@@ -143,6 +163,37 @@ body {
 .book-list-delete:hover {
   background: #991B1B;
 }
+
+/* Node context menu */
+.node-menu {
+  position: absolute;
+  z-index: 20;
+  background: #1E293B;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 130px;
+}
+.node-menu-item {
+  padding: 7px 12px;
+  background: #0F172A;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #CBD5E1;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.node-menu-item:hover:not(:disabled) { border-color: #3B82F6; color: #F1F5F9; }
+.node-menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+.node-menu-item.read { color: #4ade80; border-color: #16a34a; }
+.node-menu-item.danger { color: #FCA5A5; border-color: #7F1D1D; }
+.node-menu-item.danger:hover { background: #7F1D1D; }
 
 /* Graph */
 .graph-container { flex: 1; position: relative; }
