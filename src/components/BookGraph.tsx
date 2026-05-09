@@ -66,8 +66,7 @@ function escapeXml(value: string): string {
 }
 
 function nodeTitle(title?: string): string {
-  if (!title) return '';
-  return title.length > 14 ? `${title.slice(0, 12)}…` : title;
+  return title ?? '';
 }
 
 function nodeAuthor(author?: string): string {
@@ -79,14 +78,19 @@ function phantomId(bookId: string): string {
   return `${bookId}::a`;
 }
 
-const PHANTOM_Y = 58;
+function calcPhantomY(title: string): number {
+  // 110px wide, font-size 10, Japanese chars ~10px wide → ~11 chars/line, line-height ~14px
+  const lines = Math.max(1, Math.ceil(title.length / 11));
+  return 51 + lines * 14 + 8; // node-bottom(48) + margin(3) + text + gap(8)
+}
 
 function syncPhantom(cy: cytoscape.Core, bookId: string) {
   const main = cy.getElementById(bookId);
   const phantom = cy.getElementById(phantomId(bookId));
   if (main.length && phantom.length) {
     const pos = main.position();
-    phantom.position({ x: pos.x, y: pos.y + PHANTOM_Y });
+    const offset: number = main.data('phantomY') ?? 80;
+    phantom.position({ x: pos.x, y: pos.y + offset });
   }
 }
 
@@ -113,7 +117,7 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
             'text-halign': 'center',
             'text-margin-y': 3,
             'text-wrap': 'wrap',
-            'text-max-width': '90px',
+            'text-max-width': '110px',
             width: 68,
             height: 96,
             shape: 'round-rectangle',
@@ -253,15 +257,17 @@ export function BookGraph({ data, enabledTypes, selectedId, onSelectBook, layout
       const proxyUrl = coverForBook(book);
       const isDataUri = proxyUrl.startsWith('data:');
 
+      const py = calcPhantomY(book.title);
       if (existingNodeIds.has(book.id)) {
         const node = cy.getElementById(book.id);
         node.data('label', nodeTitle(book.title));
         node.data('read', book.read ?? false);
+        node.data('phantomY', py);
         cy.getElementById(phantomId(book.id)).data('label', nodeAuthor(book.authors?.[0]));
         if (!isDataUri) asyncLoadCover(book.id, proxyUrl, generated);
       } else {
         added.push({
-          data: { id: book.id, label: nodeTitle(book.title), read: book.read ?? false, cover: generated },
+          data: { id: book.id, label: nodeTitle(book.title), read: book.read ?? false, cover: generated, phantomY: py },
         });
         added.push({
           data: { id: phantomId(book.id), label: nodeAuthor(book.authors?.[0]) },
