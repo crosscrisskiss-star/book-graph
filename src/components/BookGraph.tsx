@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import cytoscape from 'cytoscape';
 import type { Book, GraphData, RelationshipType } from '../types';
 import { REL_COLORS } from '../types';
+import { loadPositions, savePositions, type PositionMap } from '../lib/positions';
 
 interface Props {
   data: GraphData;
@@ -189,6 +190,7 @@ export function BookGraph({
   const cyRef = useRef<cytoscape.Core | null>(null);
   const groupByAuthorRef = useRef(groupByAuthor);
   const onSelectBookRef = useRef(onSelectBook);
+  const positionsLoadedRef = useRef(false);
   const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
@@ -205,6 +207,11 @@ export function BookGraph({
     if (groupByAuthorRef.current) applyAuthorLayout(cy, data.books);
     else applyGridLayout(cy);
     setZoom(cy.zoom());
+    const positions: PositionMap = {};
+    cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+      positions[node.id()] = { ...node.position() };
+    });
+    savePositions(positions);
   }, [data.books]);
 
   const scheduleLayout = useCallback(() => {
@@ -301,6 +308,13 @@ export function BookGraph({
 
     cy.on('zoom', () => setZoom(cy.zoom()));
     cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (event) => onSelectBookRef.current(event.target.id()));
+    cy.on('dragfree', `node${BOOK_NODE_SELECTOR}`, () => {
+      const positions: PositionMap = {};
+      cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+        positions[node.id()] = { ...node.position() };
+      });
+      savePositions(positions);
+    });
 
     cyRef.current = cy;
     return () => {
@@ -376,7 +390,33 @@ export function BookGraph({
       changed = true;
     }
 
-    if (changed) scheduleLayout();
+    if (changed) {
+      if (!positionsLoadedRef.current) {
+        positionsLoadedRef.current = true;
+        const saved = loadPositions();
+        const allSaved = data.books.length > 0 && data.books.every((b) => saved[b.id]);
+        if (allSaved) {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+              const c = cyRef.current;
+              if (!c || cancelled) return;
+              c.batch(() => {
+                for (const book of data.books) {
+                  const node = c.getElementById(book.id);
+                  if (node.length) node.position(saved[book.id]);
+                }
+              });
+              fitVisible(c);
+              setZoom(c.zoom());
+            });
+          });
+        } else {
+          scheduleLayout();
+        }
+      } else {
+        scheduleLayout();
+      }
+    }
 
     return () => {
       cancelled = true;
