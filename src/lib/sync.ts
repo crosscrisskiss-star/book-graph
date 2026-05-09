@@ -6,7 +6,7 @@ export function isSyncConfigured(): boolean {
 
 export async function cloudLoad(code: string): Promise<GraphData | null> {
   const res = await fetch(`/api/sync?code=${encodeURIComponent(code)}`);
-  if (res.status === 503) return null;
+  if (res.status === 404 || res.status === 503) return null;
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`load ${res.status}: ${body}`);

@@ -1,4 +1,6 @@
 import type { Book } from '../types';
+import type { BookSearchFilters } from './bookSearchFilters';
+import { keywordFromFilters, matchesBookFilters } from './bookSearchFilters';
 
 const BASE = '/api/ndl/opensearch';
 const DC = 'http://purl.org/dc/elements/1.1/';
@@ -51,6 +53,7 @@ function parseItems(xml: string): Book[] {
       if (!title) return null;
 
       const creatorRaw = textNS(item, DC, 'creator');
+      const publisher = textNS(item, DC, 'publisher');
       const dateRaw = textNS(item, DC, 'date');
       const identifiers = allTextNS(item, DC, 'identifier');
       const subjects = allTextNS(item, DC, 'subject');
@@ -70,6 +73,7 @@ function parseItems(xml: string): Book[] {
         series: [],
         coverUrl: isbn ? coverUrl(isbn) : undefined,
         year: Number.isNaN(year) ? undefined : year,
+        publisher,
         isbn,
       };
     })
@@ -117,6 +121,19 @@ export async function searchBooksNDL(query: string): Promise<Book[]> {
     ndlSearch({ creator: query }, 20),
   ]);
   return dedupeBooks([...byTitle, ...byCreator]);
+}
+
+export async function searchBooksNDLFiltered(filters: BookSearchFilters): Promise<Book[]> {
+  const params: Record<string, string> = {};
+  if (filters.title.trim()) params.title = filters.title.trim();
+  if (filters.author.trim()) params.creator = filters.author.trim();
+  if (filters.publisher.trim()) params.publisher = filters.publisher.trim();
+
+  const books = Object.keys(params).length > 0
+    ? await ndlSearch(params, 40)
+    : await ndlSearch({ any: keywordFromFilters(filters) }, 40);
+
+  return dedupeBooks(books).filter((book) => matchesBookFilters(book, filters));
 }
 
 export function getBooksByAuthorNDL(author: string): Promise<Book[]> {

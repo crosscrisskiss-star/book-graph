@@ -3,6 +3,7 @@ import type { Book, Relationship, RelationshipType } from '../types';
 import { REL_LABELS } from '../types';
 import { getBooksByAuthor, getBooksBySubject } from '../lib/openLibrary';
 import { getBooksByAuthorNDL, getBooksBySubjectNDL } from '../lib/ndl';
+import { booklogSearchUrl } from '../lib/booklogLink';
 import { LibraryPanel } from './LibraryPanel';
 
 function amazonUrl(book: Book): string {
@@ -17,6 +18,7 @@ const TEXT = {
   year: '\u5e74',
   series: '\u30b7\u30ea\u30fc\u30ba',
   amazon: 'Amazon\u3067\u8cb7\u3046',
+  booklog: '\u30d6\u30af\u30ed\u30b0\u3067\u898b\u308b',
   borrow: '\u56f3\u66f8\u9928\u3067\u501f\u308a\u308b',
   deleteBook: '\u3053\u306e\u672c\u3092\u524a\u9664',
   expandSection: '\u95a2\u4fc2\u6027\u3092\u5c55\u958b',
@@ -48,6 +50,7 @@ interface Props {
   onAddRelationship: (rel: Omit<Relationship, 'id'>) => void;
   onRemove: (id: string) => void;
   onToggleRead: (id: string) => void;
+  onUpdateBook: (id: string, patch: Partial<Book>) => void;
   onClose: () => void;
 }
 
@@ -64,6 +67,7 @@ export function BookSidebar({
   onAddRelationship,
   onRemove,
   onToggleRead,
+  onUpdateBook,
   onClose,
 }: Props) {
   const [expanding, setExpanding] = useState<RelationshipType | null>(null);
@@ -201,8 +205,50 @@ export function BookSidebar({
       >
         {book.read ? '✓ 既読' : '○ 未読'}
       </button>
+      <div className="sidebar-section-title">評価・読書メモ</div>
+      <div className="book-note-form">
+        <label className="book-note-label">
+          <span>カテゴリ</span>
+          <input
+            className="book-category-input"
+            value={book.category ?? ''}
+            onChange={(event) => onUpdateBook(book.id, { category: event.target.value })}
+            placeholder="カテゴリ"
+          />
+        </label>
+        <label className="book-note-label">
+          <span>評価</span>
+          <select
+            className="book-rating-select"
+            value={book.rating ?? ''}
+            onChange={(event) => {
+              const value = event.target.value;
+              onUpdateBook(book.id, { rating: value ? Number(value) : undefined });
+            }}
+          >
+            <option value="">未評価</option>
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <option key={rating} value={rating}>{rating}</option>
+            ))}
+          </select>
+        </label>
+        <label className="book-note-label">
+          <span>読書メモ</span>
+          <textarea
+            className="book-memo-input"
+            value={book.privateMemo ?? ''}
+            onChange={(event) => onUpdateBook(book.id, { privateMemo: event.target.value })}
+            placeholder="非公開の読書メモ"
+            rows={5}
+          />
+        </label>
+      </div>
+
       <a className="btn-amazon" href={amazonUrl(book)} target="_blank" rel="noopener noreferrer">
         {TEXT.amazon}
+      </a>
+      <a className="btn-booklog" href={booklogSearchUrl(book)} target="_blank" rel="noopener noreferrer">
+        {TEXT.booklog}
       </a>
       <button className="btn-library" onClick={() => setShowLibrary(true)}>
         {TEXT.borrow}

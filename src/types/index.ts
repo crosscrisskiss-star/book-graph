@@ -7,10 +7,14 @@ export interface Book {
   series: string[];
   coverUrl?: string;
   year?: number;
+  category?: string;
+  publisher?: string;
   description?: string;
   olKey: string;
   isbn?: string;
   read?: boolean;
+  rating?: number;
+  privateMemo?: string;
 }
 
 export type RelationshipType =

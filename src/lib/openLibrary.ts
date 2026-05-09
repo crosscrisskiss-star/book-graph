@@ -11,6 +11,7 @@ interface OLSearchDoc {
   cover_i?: number;
   first_publish_year?: number;
   series?: string[];
+  publisher?: string[];
 }
 
 function coverUrl(id?: number): string | undefined {
@@ -32,13 +33,14 @@ function mapDoc(doc: OLSearchDoc): Book {
     series: doc.series ?? [],
     coverUrl: coverUrl(doc.cover_i),
     year: doc.first_publish_year,
+    publisher: doc.publisher?.[0],
   };
 }
 
 export async function searchBooks(query: string, limit = 10): Promise<Book[]> {
   const params = new URLSearchParams({
     q: query,
-    fields: 'key,title,author_name,author_key,subject,cover_i,first_publish_year,series',
+    fields: 'key,title,author_name,author_key,subject,cover_i,first_publish_year,series,publisher',
     limit: String(limit),
   });
   const res = await fetch(`${BASE}/search.json?${params}`);
@@ -72,6 +74,7 @@ export async function getBooksBySubject(subject: string, limit = 10): Promise<Bo
       cover_id?: number;
       subject?: string[];
       first_publish_year?: number;
+      publisher?: string[];
     }>).map((w) => ({
       id: workId(w.key),
       olKey: w.key,
@@ -82,6 +85,7 @@ export async function getBooksBySubject(subject: string, limit = 10): Promise<Bo
       series: [],
       coverUrl: w.cover_id ? coverUrl(w.cover_id) : undefined,
       year: w.first_publish_year,
+      publisher: w.publisher?.[0],
     }));
   } catch {
     return [];

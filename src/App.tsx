@@ -15,6 +15,8 @@ import {
 import { searchBooksNDL } from './lib/ndl';
 import { getBooksByAuthorNDL, getBooksBySubjectNDL } from './lib/ndl';
 import { getBooksByAuthor, getBooksBySubject } from './lib/openLibrary';
+import type { BookSearchFilters } from './lib/bookSearchFilters';
+import { matchesBookFilters } from './lib/bookSearchFilters';
 
 const ALL_TYPES: RelationshipType[] = [
   'author',
@@ -26,6 +28,10 @@ const ALL_TYPES: RelationshipType[] = [
   'manual',
 ];
 
+function hasBooklogTitleHeader(text: string): boolean {
+  return text.includes('\u30bf\u30a4\u30c8\u30eb') || text.includes('繧ｿ繧､繝医Ν');
+}
+
 const TEXT = {
   addBook: '\u002b \u672c\u3092\u8ffd\u52a0',
   close: '\u9589\u3058\u308b',
@@ -33,6 +39,10 @@ const TEXT = {
   relationships: '\u95a2\u4fc2',
   empty: '\u300c\u002b \u672c\u3092\u8ffd\u52a0\u300d\u304b\u3089\u672c\u3092\u691c\u7d22\u3057\u3066\u30b0\u30e9\u30d5\u306b\u8ffd\u52a0\u3057\u3066\u304f\u3060\u3055\u3044',
   listTitle: '\u672c\u4e00\u89a7',
+  listFilterTitle: '\u30bf\u30a4\u30c8\u30eb',
+  listFilterAuthor: '\u8457\u8005\u540d',
+  listFilterPublisher: '\u51fa\u7248\u793e',
+  listFilterEmpty: '\u6761\u4ef6\u306b\u5408\u3046\u672c\u304c\u3042\u308a\u307e\u305b\u3093',
   select: '\u9078\u629e',
   deleteBook: '\u524a\u9664',
   recommend2: '\u304a\u3059\u3059\u30812\u518a',
@@ -50,13 +60,45 @@ interface BookListProps {
 }
 
 function BookList({ books, selectedId, onSelect }: BookListProps) {
+  const [filters, setFilters] = useState<BookSearchFilters>({
+    title: '',
+    author: '',
+    publisher: '',
+  });
+
   if (books.length === 0) return null;
+
+  const filteredBooks = books.filter((book) => matchesBookFilters(book, filters));
+
+  function updateFilter(key: keyof BookSearchFilters, value: string) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
 
   return (
     <section className="book-list-panel">
       <div className="panel-title">{TEXT.listTitle}</div>
+      <div className="book-list-filters">
+        <input
+          className="book-list-filter-input"
+          value={filters.title}
+          onChange={(event) => updateFilter('title', event.target.value)}
+          placeholder={TEXT.listFilterTitle}
+        />
+        <input
+          className="book-list-filter-input"
+          value={filters.author}
+          onChange={(event) => updateFilter('author', event.target.value)}
+          placeholder={TEXT.listFilterAuthor}
+        />
+        <input
+          className="book-list-filter-input"
+          value={filters.publisher}
+          onChange={(event) => updateFilter('publisher', event.target.value)}
+          placeholder={TEXT.listFilterPublisher}
+        />
+      </div>
       <div className="book-list">
-        {books.map((book) => (
+        {filteredBooks.map((book) => (
           <div key={book.id} className={`book-list-item${book.id === selectedId ? ' selected' : ''}`}>
             <button
               className={`book-list-main${book.read ? ' read' : ''}`}
@@ -66,9 +108,15 @@ function BookList({ books, selectedId, onSelect }: BookListProps) {
               {book.authors?.[0] && (
                 <span className="book-list-author">{book.authors[0]}</span>
               )}
+              {book.publisher && (
+                <span className="book-list-publisher">{book.publisher}</span>
+              )}
             </button>
           </div>
         ))}
+        {filteredBooks.length === 0 && (
+          <div className="book-list-empty">{TEXT.listFilterEmpty}</div>
+        )}
       </div>
     </section>
   );
@@ -80,11 +128,13 @@ export default function App() {
     new Set(ALL_TYPES)
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sidebarBookId, setSidebarBookId] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [addingRecId, setAddingRecId] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [layoutKey, setLayoutKey] = useState(0);
+  const [focusRequest, setFocusRequest] = useState<string | null>(null);
   const [groupByAuthor, setGroupByAuthor] = useState(false);
   const [syncCode, setSyncCode] = useState<string | null>(loadSyncCode);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'loading' | 'error'>('idle');
@@ -217,10 +267,10 @@ export default function App() {
     // ブクログCSVはShift-JIS。UTF-8で読んでヘッダーがなければShift-JISで再試行
     const buffer = await file.arrayBuffer();
     let text = new TextDecoder('utf-8').decode(buffer);
-    if (!text.includes('タイトル')) {
+    if (!hasBooklogTitleHeader(text)) {
       text = new TextDecoder('shift-jis').decode(buffer);
     }
-    if (!text.includes('タイトル')) {
+    if (!hasBooklogTitleHeader(text)) {
       setImportMessage('ブクログCSVの形式を認識できませんでした');
       return;
     }
@@ -258,6 +308,15 @@ export default function App() {
     }));
   }
 
+  function updateBook(id: string, patch: Partial<Book>) {
+    updateGraph((prev) => ({
+      ...prev,
+      books: prev.books.map((book) =>
+        book.id === id ? { ...book, ...patch } : book
+      ),
+    }));
+  }
+
   function removeBook(id: string) {
     updateGraph((prev) => ({
       books: prev.books.filter((book) => book.id !== id),
@@ -266,6 +325,7 @@ export default function App() {
       ),
     }));
     if (selectedId === id) setSelectedId(null);
+    if (sidebarBookId === id) setSidebarBookId(null);
   }
 
   function toggleType(type: RelationshipType) {
@@ -275,6 +335,17 @@ export default function App() {
       else next.add(type);
       return next;
     });
+  }
+
+  function selectBookFromList(id: string) {
+    setSelectedId(id);
+    setSidebarBookId(null);
+    setFocusRequest(`${id}::${Date.now()}`);
+  }
+
+  function selectBookFromGraph(id: string) {
+    setSelectedId(id);
+    setSidebarBookId(id);
   }
 
   useEffect(() => {
@@ -346,7 +417,7 @@ export default function App() {
     };
   }, [graph.books]);
 
-  const selectedBook = graph.books.find((book) => book.id === selectedId) ?? null;
+  const selectedBook = graph.books.find((book) => book.id === sidebarBookId) ?? null;
   const existingIds = new Set(graph.books.map((book) => book.id));
 
   return (
@@ -479,7 +550,7 @@ export default function App() {
               <BookList
                 books={graph.books}
                 selectedId={selectedId}
-                onSelect={setSelectedId}
+                onSelect={selectBookFromList}
               />
             </>
           )}
@@ -496,8 +567,9 @@ export default function App() {
               data={graph}
               enabledTypes={enabledTypes}
               selectedId={selectedId}
-              onSelectBook={setSelectedId}
+              onSelectBook={selectBookFromGraph}
               layoutKey={layoutKey}
+              focusRequest={focusRequest}
               groupByAuthor={groupByAuthor}
             />
           )}
@@ -514,7 +586,8 @@ export default function App() {
             onAddRelationship={addRelationship}
             onRemove={removeBook}
             onToggleRead={toggleRead}
-            onClose={() => setSelectedId(null)}
+            onUpdateBook={updateBook}
+            onClose={() => setSidebarBookId(null)}
           />
         )}
       </div>

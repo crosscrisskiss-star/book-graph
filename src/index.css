@@ -129,6 +129,29 @@ body {
 .book-list-panel {
   padding: 12px;
 }
+.book-list-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.book-list-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  background: #0F172A;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #E2E8F0;
+  font-size: 12px;
+  outline: none;
+}
+.book-list-filter-input:focus {
+  border-color: #3B82F6;
+}
+.book-list-filter-input::placeholder {
+  color: #64748B;
+}
 .book-list {
   display: flex;
   flex-direction: column;
@@ -174,6 +197,21 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.book-list-publisher {
+  display: block;
+  margin-top: 2px;
+  color: #7DD3FC;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-list-empty {
+  padding: 8px;
+  color: #94A3B8;
+  font-size: 12px;
+  line-height: 1.4;
 }
 .book-list-rec2 {
   padding: 0 6px;
@@ -446,6 +484,43 @@ body {
   font-size: 11px; font-weight: 600; color: #64748B;
   text-transform: uppercase; margin: 12px 0 6px;
 }
+.book-note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.book-note-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #94A3B8;
+  font-size: 11px;
+  font-weight: 600;
+}
+.book-category-input,
+.book-rating-select,
+.book-memo-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  background: #0F172A;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #F1F5F9;
+  font-size: 12px;
+}
+.book-category-input:focus,
+.book-rating-select:focus,
+.book-memo-input:focus {
+  outline: none;
+  border-color: #3B82F6;
+}
+.book-memo-input {
+  min-height: 90px;
+  resize: vertical;
+  line-height: 1.45;
+}
 .expand-buttons { display: flex; flex-direction: column; gap: 6px; }
 .btn-expand {
   padding: 6px 10px;
@@ -600,6 +675,24 @@ body {
   box-sizing: border-box;
 }
 .btn-amazon:hover { background: #e68a00; }
+
+.btn-booklog {
+  display: block;
+  width: 100%;
+  margin: 4px 0 4px;
+  padding: 8px;
+  background: #2563EB;
+  border: 1px solid #60A5FA;
+  border-radius: 6px;
+  color: #EFF6FF;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+.btn-booklog:hover { background: #1D4ED8; }
 
 .btn-ku {
   display: block;
