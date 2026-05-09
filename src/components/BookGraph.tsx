@@ -111,71 +111,6 @@ function runLayout(cy: cytoscape.Core, duration = 1700, randomize = false) {
   } as Parameters<typeof cy.layout>[0]).run();
 }
 
-function runAuthorLayout(cy: cytoscape.Core, books: Book[]) {
-  const authorMap = new Map<string, string[]>();
-  const groupedIds = new Set<string>();
-  const singles: string[] = [];
-
-  for (const book of books) {
-    const author = book.authors?.[0]?.trim();
-    if (!author) {
-      singles.push(book.id);
-      continue;
-    }
-    if (!authorMap.has(author)) authorMap.set(author, []);
-    authorMap.get(author)!.push(book.id);
-  }
-
-  const clusters: Array<{ author: string; ids: string[] }> = [];
-  authorMap.forEach((ids, author) => {
-    if (ids.length >= 2) {
-      clusters.push({ author, ids });
-      ids.forEach((id) => groupedIds.add(id));
-    } else {
-      singles.push(...ids);
-    }
-  });
-
-  const clusterGapX = 360;
-  const clusterGapY = 300;
-  const itemGapX = 116;
-  const itemGapY = 160;
-  const columns = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, clusters.length))));
-
-  cy.batch(() => {
-    clusters.forEach((cluster, clusterIndex) => {
-      const baseX = (clusterIndex % columns) * clusterGapX;
-      const baseY = Math.floor(clusterIndex / columns) * clusterGapY;
-      const itemColumns = Math.min(3, Math.ceil(Math.sqrt(cluster.ids.length)));
-      const itemRows = Math.ceil(cluster.ids.length / itemColumns);
-      const startX = baseX - ((itemColumns - 1) * itemGapX) / 2;
-      const startY = baseY - ((itemRows - 1) * itemGapY) / 2 + 18;
-
-      cluster.ids.forEach((bookId, index) => {
-        const node = cy.getElementById(bookId);
-        if (!node.length) return;
-        node.position({
-          x: startX + (index % itemColumns) * itemGapX,
-          y: startY + Math.floor(index / itemColumns) * itemGapY,
-        });
-      });
-    });
-
-    const singleStartY = Math.ceil(clusters.length / columns) * clusterGapY + 40;
-    singles
-      .filter((id) => !groupedIds.has(id))
-      .forEach((bookId, index) => {
-        const node = cy.getElementById(bookId);
-        if (!node.length) return;
-        node.position({
-          x: (index % 5) * itemGapX,
-          y: singleStartY + Math.floor(index / 5) * itemGapY,
-        });
-      });
-  });
-
-  cy.fit(cy.nodes().filter((node) => node.hasClass('book-node') || node.hasClass('author-group')), 48);
-}
 
 export function BookGraph({
   data,
@@ -251,10 +186,10 @@ export function BookGraph({
             'text-margin-y': 8,
             'text-wrap': 'wrap',
             'text-max-width': '220px',
-            padding: '32px',
+            padding: '28px',
             shape: 'round-rectangle',
-            width: 260,
-            height: 180,
+            width: 'label',
+            height: 'label',
           },
         },
         {
@@ -454,7 +389,7 @@ export function BookGraph({
       }
 
       if (cy.nodes(BOOK_NODE_SELECTOR).length > 0) {
-        runAuthorLayout(cy, data.books);
+        runLayout(cy, 2000, true);
       }
     } else if (groupByAuthorChanged) {
       // groupByAuthor toggled OFF: re-layout from scratch
@@ -468,9 +403,8 @@ export function BookGraph({
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy || cy.nodes(BOOK_NODE_SELECTOR).length === 0 || layoutKey === 0) return;
-    if (groupByAuthorRef.current) runAuthorLayout(cy, data.books);
-    else runLayout(cy, 1800, true);
-  }, [layoutKey, data.books]);
+    runLayout(cy, 1800, true);
+  }, [layoutKey]);
 
   useEffect(() => {
     const cy = cyRef.current;
