@@ -521,6 +521,7 @@ body {
   font-weight: 600;
 }
 .book-category-input,
+.book-category-select,
 .book-rating-select,
 .book-memo-input {
   width: 100%;
@@ -533,11 +534,52 @@ body {
   font-size: 12px;
 }
 .book-category-input:focus,
+.book-category-select:focus,
 .book-rating-select:focus,
 .book-memo-input:focus {
   outline: none;
   border-color: #3B82F6;
 }
+.category-add-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.category-add-row .book-category-input {
+  flex: 1;
+}
+.category-add-btn,
+.category-cancel-btn {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid #475569;
+}
+.category-add-btn {
+  background: #1e3a5f;
+  color: #93c5fd;
+  border-color: #3B82F6;
+}
+.category-add-btn:hover { background: #1d4ed8; }
+.category-cancel-btn {
+  background: #1e293b;
+  color: #94a3b8;
+}
+.category-cancel-btn:hover { background: #334155; }
+.book-list-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  background: #0F172A;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #E2E8F0;
+  font-size: 12px;
+  outline: none;
+}
+.book-list-filter-select:focus { border-color: #3B82F6; }
 .book-memo-input {
   min-height: 90px;
   resize: vertical;

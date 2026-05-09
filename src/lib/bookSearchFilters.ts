@@ -4,6 +4,8 @@ export interface BookSearchFilters {
   title: string;
   author: string;
   publisher: string;
+  category: string;
+  rating: string;
 }
 
 export function hasSearchFilters(filters: BookSearchFilters): boolean {
@@ -21,11 +23,18 @@ function includesNeedle(haystack: string | undefined, needle: string): boolean {
 }
 
 export function matchesBookFilters(book: Book, filters: BookSearchFilters): boolean {
-  return (
-    includesNeedle(book.title, filters.title) &&
-    includesNeedle(book.authors.join(' '), filters.author) &&
-    includesNeedle(book.publisher, filters.publisher)
-  );
+  if (!includesNeedle(book.title, filters.title)) return false;
+  if (!includesNeedle(book.authors.join(' '), filters.author)) return false;
+  if (!includesNeedle(book.publisher, filters.publisher)) return false;
+  if (filters.category !== '' && (book.category ?? '') !== filters.category) return false;
+  if (filters.rating !== '') {
+    if (filters.rating === '0') {
+      if (book.rating !== undefined) return false;
+    } else {
+      if (book.rating !== Number(filters.rating)) return false;
+    }
+  }
+  return true;
 }
 
 export function keywordFromFilters(filters: BookSearchFilters): string {

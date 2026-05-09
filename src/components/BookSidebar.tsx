@@ -48,11 +48,13 @@ interface Props {
   relationships: Relationship[];
   allBooks: Book[];
   enabledTypes: Set<RelationshipType>;
+  categories: string[];
   onAddBook: (book: Book) => void;
   onAddRelationship: (rel: Omit<Relationship, 'id'>) => void;
   onRemove: (id: string) => void;
   onToggleRead: (id: string) => void;
   onUpdateBook: (id: string, patch: Partial<Book>) => void;
+  onAddCategory: (cat: string) => void;
   onClose: () => void;
 }
 
@@ -65,17 +67,21 @@ export function BookSidebar({
   relationships,
   allBooks,
   enabledTypes,
+  categories,
   onAddBook,
   onAddRelationship,
   onRemove,
   onToggleRead,
   onUpdateBook,
+  onAddCategory,
   onClose,
 }: Props) {
   const [expanding, setExpanding] = useState<RelationshipType | null>(null);
   const [addingRec, setAddingRec] = useState(false);
   const [recMessage, setRecMessage] = useState('');
   const [manualTarget, setManualTarget] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [categoryInput, setCategoryInput] = useState('');
   const [manualType, setManualType] = useState<RelationshipType>('recommendation');
   const [manualLabel, setManualLabel] = useState('');
   const [showLibrary, setShowLibrary] = useState(false);
@@ -176,6 +182,16 @@ export function BookSidebar({
     }
   }
 
+  function confirmAddCategory() {
+    const cat = categoryInput.trim();
+    if (cat) {
+      onAddCategory(cat);
+      onUpdateBook(book.id, { category: cat });
+    }
+    setAddingCategory(false);
+    setCategoryInput('');
+  }
+
   function addManual() {
     const needle = manualTarget.trim().toLowerCase();
     const target = allBooks.find((item) => item.title.toLowerCase().includes(needle));
@@ -226,12 +242,41 @@ export function BookSidebar({
       <div className="book-note-form">
         <label className="book-note-label">
           <span>カテゴリ</span>
-          <input
-            className="book-category-input"
-            value={book.category ?? ''}
-            onChange={(event) => onUpdateBook(book.id, { category: event.target.value })}
-            placeholder="カテゴリ"
-          />
+          {addingCategory ? (
+            <div className="category-add-row">
+              <input
+                className="book-category-input"
+                value={categoryInput}
+                onChange={(e) => setCategoryInput(e.target.value)}
+                placeholder="カテゴリ名"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') confirmAddCategory();
+                  if (e.key === 'Escape') setAddingCategory(false);
+                }}
+              />
+              <button className="category-add-btn" onClick={confirmAddCategory}>追加</button>
+              <button className="category-cancel-btn" onClick={() => setAddingCategory(false)}>×</button>
+            </div>
+          ) : (
+            <select
+              className="book-category-select"
+              value={book.category ?? ''}
+              onChange={(e) => {
+                if (e.target.value === '__add__') {
+                  setAddingCategory(true);
+                } else {
+                  onUpdateBook(book.id, { category: e.target.value || undefined });
+                }
+              }}
+            >
+              <option value="">なし</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+              <option value="__add__">＋ 新しいカテゴリ...</option>
+            </select>
+          )}
         </label>
         <label className="book-note-label">
           <span>評価</span>

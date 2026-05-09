@@ -57,13 +57,16 @@ interface BookListProps {
   books: Book[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  categories: string[];
 }
 
-function BookList({ books, selectedId, onSelect }: BookListProps) {
+function BookList({ books, selectedId, onSelect, categories }: BookListProps) {
   const [filters, setFilters] = useState<BookSearchFilters>({
     title: '',
     author: '',
     publisher: '',
+    category: '',
+    rating: '',
   });
 
   if (books.length === 0) return null;
@@ -73,6 +76,10 @@ function BookList({ books, selectedId, onSelect }: BookListProps) {
   function updateFilter(key: keyof BookSearchFilters, value: string) {
     setFilters((current) => ({ ...current, [key]: value }));
   }
+
+  const usedCategories = categories.filter((c) => books.some((b) => b.category === c));
+  const usedRatings = [...new Set(books.map((b) => b.rating).filter((r): r is number => r !== undefined))].sort();
+  const hasUnrated = books.some((b) => b.rating === undefined);
 
   return (
     <section className="book-list-panel">
@@ -96,6 +103,31 @@ function BookList({ books, selectedId, onSelect }: BookListProps) {
           onChange={(event) => updateFilter('publisher', event.target.value)}
           placeholder={TEXT.listFilterPublisher}
         />
+        {usedCategories.length > 0 && (
+          <select
+            className="book-list-filter-select"
+            value={filters.category}
+            onChange={(e) => updateFilter('category', e.target.value)}
+          >
+            <option value="">すべてのカテゴリ</option>
+            {usedCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        )}
+        {(usedRatings.length > 0 || hasUnrated) && (
+          <select
+            className="book-list-filter-select"
+            value={filters.rating}
+            onChange={(e) => updateFilter('rating', e.target.value)}
+          >
+            <option value="">すべての評価</option>
+            {usedRatings.map((r) => (
+              <option key={r} value={String(r)}>{'★'.repeat(r)}</option>
+            ))}
+            {hasUnrated && <option value="0">未評価</option>}
+          </select>
+        )}
       </div>
       <div className="book-list">
         {filteredBooks.map((book) => (
@@ -326,6 +358,14 @@ export default function App() {
     }));
     if (selectedId === id) setSelectedId(null);
     if (sidebarBookId === id) setSidebarBookId(null);
+  }
+
+  function addCategory(cat: string) {
+    updateGraph((prev) => {
+      const existing = prev.categories ?? [];
+      if (existing.includes(cat)) return prev;
+      return { ...prev, categories: [...existing, cat] };
+    });
   }
 
   function removeAllBooks() {
@@ -584,6 +624,7 @@ export default function App() {
                 books={graph.books}
                 selectedId={selectedId}
                 onSelect={selectBookFromList}
+                categories={graph.categories ?? []}
               />
             </>
           )}
@@ -615,11 +656,13 @@ export default function App() {
             relationships={graph.relationships}
             allBooks={graph.books}
             enabledTypes={enabledTypes}
+            categories={graph.categories ?? []}
             onAddBook={addBook}
             onAddRelationship={addRelationship}
             onRemove={removeBook}
             onToggleRead={toggleRead}
             onUpdateBook={updateBook}
+            onAddCategory={addCategory}
             onClose={() => setSidebarBookId(null)}
           />
         )}

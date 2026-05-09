@@ -37,6 +37,7 @@ export interface Relationship {
 export interface GraphData {
   books: Book[];
   relationships: Relationship[];
+  categories?: string[];
 }
 
 export const REL_COLORS: Record<RelationshipType, string> = {
