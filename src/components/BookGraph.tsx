@@ -502,14 +502,18 @@ export function BookGraph({
     const node = cy.getElementById(bookId);
     if (!node.length) return;
 
-    // Pan to node only if it's outside the visible viewport; don't change zoom
-    const bb = node.renderedBoundingBox();
-    const w = cy.width();
-    const h = cy.height();
-    const inView = bb.x1 >= 0 && bb.y1 >= 0 && bb.x2 <= w && bb.y2 <= h;
-    if (!inView) {
-      cy.animate({ center: { eles: node } }, { duration: 200 });
-    }
+    const currentZoom = cy.zoom();
+    const position = node.position();
+    cy.animate(
+      {
+        pan: {
+          x: cy.width() / 2 - position.x * currentZoom,
+          y: cy.height() / 2 - position.y * currentZoom,
+        },
+      },
+      { duration: 200 }
+    );
+    setZoom(currentZoom);
   }, [focusRequest]);
 
   return (

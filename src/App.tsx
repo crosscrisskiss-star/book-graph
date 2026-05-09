@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Book, GraphData, Relationship, RelationshipType } from './types';
 import { loadGraph, saveGraph } from './lib/storage';
 import { dedupeRelationships, detectRelationships, detectAllRelationships } from './lib/relationships';
@@ -24,7 +24,7 @@ const ALL_TYPES: RelationshipType[] = [
   'genre',
   'recommendation',
   'reference',
-  'theme',
+  'category',
   'manual',
 ];
 
@@ -473,7 +473,10 @@ export default function App() {
   }, [graph.books]);
 
   const selectedBook = graph.books.find((book) => book.id === sidebarBookId) ?? null;
-  const filteredBooks = graph.books.filter((book) => matchesBookFilters(book, listFilters));
+  const filteredBooks = useMemo(
+    () => graph.books.filter((book) => matchesBookFilters(book, listFilters)),
+    [graph.books, listFilters]
+  );
 
   function updateListFilter(key: keyof BookSearchFilters, value: string) {
     setListFilters((prev) => ({ ...prev, [key]: value }));

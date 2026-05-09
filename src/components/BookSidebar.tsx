@@ -40,7 +40,7 @@ const EXPAND_TYPES: Array<{ type: RelationshipType; label: string }> = [
   { type: 'author', label: '\u540c\u8457\u8005\u306e\u672c\u3092\u5c55\u958b' },
   { type: 'genre', label: '\u30b8\u30e3\u30f3\u30eb\u95a2\u9023\u3092\u5c55\u958b' },
   { type: 'recommendation', label: '\u304a\u3059\u3059\u3081\u3092\u5c55\u958b' },
-  { type: 'theme', label: '\u30c6\u30fc\u30de\u95a2\u9023\u3092\u5c55\u958b' },
+  { type: 'category', label: '\u30ab\u30c6\u30b4\u30ea\u95a2\u9023\u3092\u5c55\u958b' },
 ];
 
 interface Props {
@@ -105,7 +105,7 @@ export function BookSidebar({
           ? await getBooksByAuthorNDL(authors[0])
           : await getBooksByAuthor(authorKeys[0] ?? authors[0]);
       } else if (
-        (type === 'genre' || type === 'theme' || type === 'recommendation') &&
+        (type === 'genre' || type === 'category' || type === 'recommendation') &&
         subjects.length > 0
       ) {
         candidates = isNDL

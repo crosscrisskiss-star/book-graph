@@ -23,7 +23,7 @@ export type RelationshipType =
   | 'genre'
   | 'recommendation'
   | 'reference'
-  | 'theme'
+  | 'category'
   | 'manual';
 
 export interface Relationship {
@@ -46,7 +46,7 @@ export const REL_COLORS: Record<RelationshipType, string> = {
   genre: '#10B981',
   recommendation: '#F59E0B',
   reference: '#EF4444',
-  theme: '#06B6D4',
+  category: '#F97316',
   manual: '#9CA3AF',
 };
 
@@ -56,6 +56,6 @@ export const REL_LABELS: Record<RelationshipType, string> = {
   genre: 'ジャンル',
   recommendation: 'おすすめ',
   reference: '引用・参考',
-  theme: 'テーマ',
+  category: 'カテゴリ',
   manual: '手動',
 };

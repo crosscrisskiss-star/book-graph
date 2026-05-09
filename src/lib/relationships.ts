@@ -48,7 +48,7 @@ export function detectRelationships(
       }
     }
 
-    if (enabledTypes.has('genre') || enabledTypes.has('theme')) {
+    if (enabledTypes.has('genre')) {
       const bookSubjects = list(book.subjects);
       const newSubjects = list(newBook.subjects);
       const normalizedBookSubjects = bookSubjects.map((x) => x.toLowerCase());
@@ -56,16 +56,27 @@ export function detectRelationships(
         normalizedBookSubjects.includes(s.toLowerCase())
       );
       if (sharedSubjects.length >= 2) {
-        const type: RelationshipType = sharedSubjects.length >= 4 ? 'theme' : 'genre';
-        if (enabledTypes.has(type)) {
-          rels.push({
-            id: relId(book.id, newBook.id, type),
-            source: book.id,
-            target: newBook.id,
-            type,
-            label: sharedSubjects.slice(0, 2).join(', '),
-          });
-        }
+        rels.push({
+          id: relId(book.id, newBook.id, 'genre'),
+          source: book.id,
+          target: newBook.id,
+          type: 'genre',
+          label: sharedSubjects.slice(0, 2).join(', '),
+        });
+      }
+    }
+
+    if (enabledTypes.has('category')) {
+      const bookCat = book.category?.trim();
+      const newCat = newBook.category?.trim();
+      if (bookCat && newCat && bookCat === newCat) {
+        rels.push({
+          id: relId(book.id, newBook.id, 'category'),
+          source: book.id,
+          target: newBook.id,
+          type: 'category',
+          label: bookCat,
+        });
       }
     }
   }
@@ -131,23 +142,34 @@ export function detectAllRelationships(
         }
       }
 
-      if (enabledTypes.has('genre') || enabledTypes.has('theme')) {
+      if (enabledTypes.has('genre')) {
         const aSubjects = list(a.subjects);
         const bSubjectsLower = list(b.subjects).map((s) => s.toLowerCase());
         const sharedSubjects = aSubjects.filter((s) =>
           bSubjectsLower.includes(s.toLowerCase())
         );
         if (sharedSubjects.length >= 2) {
-          const type: RelationshipType = sharedSubjects.length >= 4 ? 'theme' : 'genre';
-          if (enabledTypes.has(type)) {
-            rels.push({
-              id: relId(a.id, b.id, type),
-              source: a.id,
-              target: b.id,
-              type,
-              label: sharedSubjects.slice(0, 2).join(', '),
-            });
-          }
+          rels.push({
+            id: relId(a.id, b.id, 'genre'),
+            source: a.id,
+            target: b.id,
+            type: 'genre',
+            label: sharedSubjects.slice(0, 2).join(', '),
+          });
+        }
+      }
+
+      if (enabledTypes.has('category')) {
+        const aCat = a.category?.trim();
+        const bCat = b.category?.trim();
+        if (aCat && bCat && aCat === bCat) {
+          rels.push({
+            id: relId(a.id, b.id, 'category'),
+            source: a.id,
+            target: b.id,
+            type: 'category',
+            label: aCat,
+          });
         }
       }
     }
