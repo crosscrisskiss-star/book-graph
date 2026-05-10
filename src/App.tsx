@@ -69,6 +69,7 @@ function BookList({ books, filteredBooks, selectedId, onSelect, categories, filt
   const usedCategories = categories.filter((c) => books.some((b) => b.category === c));
   const usedRatings = [...new Set(books.map((b) => b.rating).filter((r): r is number => r !== undefined))].sort();
   const hasUnrated = books.some((b) => b.rating === undefined);
+  const usedSubjects = [...new Set(books.flatMap((b) => b.subjects))].sort();
 
   return (
     <section className="book-list-panel">
@@ -92,6 +93,18 @@ function BookList({ books, filteredBooks, selectedId, onSelect, categories, filt
           onChange={(event) => onFilterChange('publisher', event.target.value)}
           placeholder={TEXT.listFilterPublisher}
         />
+        {usedSubjects.length > 0 && (
+          <select
+            className="book-list-filter-select"
+            value={filters.subject}
+            onChange={(e) => onFilterChange('subject', e.target.value)}
+          >
+            <option value="">すべてのジャンル</option>
+            {usedSubjects.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        )}
         {usedCategories.length > 0 && (
           <select
             className="book-list-filter-select"
@@ -154,7 +167,7 @@ export default function App() {
   const [addingRecId, setAddingRecId] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
   const [listFilters, setListFilters] = useState<BookSearchFilters>({
-    title: '', author: '', publisher: '', category: '', rating: '',
+    title: '', author: '', publisher: '', category: '', rating: '', subject: '',
   });
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [layoutKey, setLayoutKey] = useState(0);
@@ -307,8 +320,25 @@ export default function App() {
       const existingIds = new Set(prev.books.map((b) => b.id));
       let next = prev;
       let added = 0;
+      let updated = 0;
       for (const book of books) {
-        if (existingIds.has(book.id)) continue;
+        if (existingIds.has(book.id)) {
+          next = {
+            ...next,
+            books: next.books.map((b) =>
+              b.id !== book.id ? b : {
+                ...b,
+                rating: book.rating,
+                read: book.read,
+                category: book.category,
+                privateMemo: book.privateMemo,
+                subjects: book.subjects.length > 0 ? book.subjects : b.subjects,
+              }
+            ),
+          };
+          updated++;
+          continue;
+        }
         const newRels = detectRelationships(next.books, book, enabledTypes);
         next = {
           books: [...next.books, book],
@@ -317,7 +347,10 @@ export default function App() {
         existingIds.add(book.id);
         added++;
       }
-      setImportMessage(`${added}冊追加しました`);
+      const parts = [];
+      if (added > 0) parts.push(`${added}冊追加`);
+      if (updated > 0) parts.push(`${updated}冊更新`);
+      setImportMessage(parts.length > 0 ? `${parts.join('・')}しました` : '変更はありませんでした');
       return next;
     });
     setTimeout(() => setImportMessage(''), 3000);
@@ -350,6 +383,27 @@ export default function App() {
     }));
     if (selectedId === id) setSelectedId(null);
     if (sidebarBookId === id) setSidebarBookId(null);
+  }
+
+  function addTextLabel(id: string, text: string, kind: 'text' | 'frame') {
+    updateGraph((prev) => ({
+      ...prev,
+      textLabels: [...(prev.textLabels ?? []), { id, text, kind }],
+    }));
+  }
+
+  function updateTextLabel(id: string, text: string) {
+    updateGraph((prev) => ({
+      ...prev,
+      textLabels: (prev.textLabels ?? []).map((l) => l.id === id ? { ...l, text } : l),
+    }));
+  }
+
+  function removeTextLabel(id: string) {
+    updateGraph((prev) => ({
+      ...prev,
+      textLabels: (prev.textLabels ?? []).filter((l) => l.id !== id),
+    }));
   }
 
   function addCategory(cat: string) {
@@ -648,6 +702,10 @@ export default function App() {
               layoutKey={layoutKey}
               focusRequest={focusRequest}
               groupByAuthor={groupByAuthor}
+              textLabels={graph.textLabels ?? []}
+              onAddTextLabel={addTextLabel}
+              onUpdateTextLabel={updateTextLabel}
+              onDeleteTextLabel={removeTextLabel}
             />
           )}
 

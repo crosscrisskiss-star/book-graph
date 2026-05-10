@@ -23,6 +23,10 @@
     {
       "source": "/api/ol-cover/:path*",
       "destination": "https://covers.openlibrary.org/:path*"
+    },
+    {
+      "source": "/api/booklog/:path*",
+      "destination": "https://api.booklog.jp/:path*"
     }
   ]
 }

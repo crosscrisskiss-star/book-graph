@@ -44,12 +44,19 @@ export interface FavoriteSyncItem {
   positions: PositionSyncMap;
 }
 
+export interface TextLabel {
+  id: string;
+  text: string;
+  kind: 'text' | 'frame';
+}
+
 export interface GraphData {
   books: Book[];
   relationships: Relationship[];
   categories?: string[];
   positions?: PositionSyncMap;
   favorites?: FavoriteSyncItem[];
+  textLabels?: TextLabel[];
 }
 
 export const REL_COLORS: Record<RelationshipType, string> = {

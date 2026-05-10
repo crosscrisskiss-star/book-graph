@@ -3,6 +3,7 @@ import type { Book } from '../types';
 import { searchBooksGoogle } from '../lib/googleBooks';
 import { searchBooksNDL } from '../lib/ndl';
 import { searchBooks } from '../lib/openLibrary';
+import { getBooklogGenre } from '../lib/bukuro';
 
 const JP_RE = /[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]/;
 
@@ -21,6 +22,18 @@ interface Props {
   existingIds: Set<string>;
 }
 
+async function enrichWithBooklogGenre(book: Book): Promise<Book> {
+  const isbn = book.isbn?.replace(/[-\s]/g, '');
+  if (!isbn || book.subjects.length > 0) return book;
+  const genre = await getBooklogGenre(isbn);
+  if (!genre) return book;
+  return {
+    ...book,
+    subjects: [genre],
+    category: book.category ?? genre,
+  };
+}
+
 async function searchJapaneseBooks(query: string): Promise<Book[]> {
   const [googleBooks, ndlBooks] = await Promise.all([
     searchBooksGoogle(query, 20),
@@ -28,12 +41,14 @@ async function searchJapaneseBooks(query: string): Promise<Book[]> {
   ]);
 
   const seen = new Set<string>();
-  return [...googleBooks, ...ndlBooks].filter((book) => {
+  const deduplicated = [...googleBooks, ...ndlBooks].filter((book) => {
     const key = `${book.title.trim().toLowerCase()}::${book.authors[0] ?? ''}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+
+  return Promise.all(deduplicated.map(enrichWithBooklogGenre));
 }
 
 export function BookSearch({ onAdd, existingIds }: Props) {

@@ -109,6 +109,11 @@ export default defineConfig({
         },
         rewrite: (path) => path.replace(/^\/api\/books-cover/, ''),
       },
+      '/api/booklog': {
+        target: 'https://api.booklog.jp',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/booklog/, ''),
+      },
     },
   },
 })

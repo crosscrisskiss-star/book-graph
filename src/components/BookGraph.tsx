@@ -4,6 +4,7 @@ import type { Book, GraphData, RelationshipType } from '../types';
 import { REL_COLORS } from '../types';
 import { loadPositions, savePositions, type PositionMap } from '../lib/positions';
 import { loadFavorites, saveFavorite, deleteFavorite, type FavoriteLayout } from '../lib/favorites';
+import type { TextLabel } from '../types';
 
 interface Props {
   data: GraphData;
@@ -13,7 +14,14 @@ interface Props {
   layoutKey: number;
   focusRequest: string | null;
   groupByAuthor: boolean;
+  textLabels: TextLabel[];
+  onAddTextLabel: (id: string, text: string, kind: 'text' | 'frame') => void;
+  onUpdateTextLabel: (id: string, text: string) => void;
+  onDeleteTextLabel: (id: string) => void;
 }
+
+type EditingLabel = { id: string; text: string; x: number; y: number; kind: 'text' | 'frame' };
+type AddingKind = 'text' | 'frame' | null;
 
 const BOOK_NODE_SELECTOR = '.book-node';
 
@@ -93,9 +101,20 @@ function fitVisible(cy: cytoscape.Core) {
   if (nodes.length > 0) cy.fit(nodes, 48);
 }
 
+function supportsTouchInput(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return (
+    navigator.maxTouchPoints > 0 ||
+    'ontouchstart' in window ||
+    window.matchMedia?.('(pointer: coarse)').matches === true
+  );
+}
+
+const ANNOTATION_SELECTOR = '.annotation-node';
+
 function saveCurrentPositions(cy: cytoscape.Core) {
   const positions: PositionMap = loadPositions();
-  cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+  cy.nodes(`${BOOK_NODE_SELECTOR}, ${ANNOTATION_SELECTOR}`).forEach((node) => {
     positions[node.id()] = { ...node.position() };
   });
   savePositions(positions);
@@ -209,6 +228,10 @@ export function BookGraph({
   layoutKey,
   focusRequest,
   groupByAuthor,
+  textLabels,
+  onAddTextLabel,
+  onUpdateTextLabel,
+  onDeleteTextLabel,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
@@ -225,6 +248,13 @@ export function BookGraph({
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragBoxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const [dragBox, setDragBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const pinchRef = useRef<{ dist: number; midX: number; midY: number } | null>(null);
+  const overlayDragNodeRef = useRef<{ nodeId: string; startNodeX: number; startNodeY: number; startTouchX: number; startTouchY: number } | null>(null);
+  const selectedNodesStartRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const isTouchDevice = useRef(supportsTouchInput());
+  const [editingLabel, setEditingLabel] = useState<EditingLabel | null>(null);
+  const [addingKind, setAddingKind] = useState<AddingKind>(null);
+  const [addLabelText, setAddLabelText] = useState('');
 
   useEffect(() => {
     isSelectModeRef.current = isSelectMode;
@@ -274,12 +304,15 @@ export function BookGraph({
       const next = !prev;
       const cy = cyRef.current;
       if (cy) {
-        cy.userPanningEnabled(!next);
-        cy.boxSelectionEnabled(next);
-        if (next) {
-          cy.minZoom(0.05);
+        if (isTouchDevice.current) {
+          // Touch: overlay intercepts all touch, Cytoscape settings unchanged
+          if (!next) cy.elements().unselect();
         } else {
-          cy.elements().unselect();
+          // Mouse: Cytoscape native box selection
+          cy.userPanningEnabled(!next);
+          cy.boxSelectionEnabled(next);
+          if (next) cy.minZoom(0.05);
+          else cy.elements().unselect();
         }
       }
       return next;
@@ -318,6 +351,204 @@ export function BookGraph({
     setFavorites(loadFavorites());
   }, []);
 
+  // ── Text label / frame handlers ──────────────────────────────────────────────
+  const handleConfirmAddLabel = useCallback(() => {
+    const text = addLabelText.trim();
+    if (!text || !addingKind) return;
+    const cy = cyRef.current;
+    const id = `label_${Date.now()}`;
+    if (cy) {
+      const pan = cy.pan();
+      const zoom = cy.zoom();
+      const x = (cy.width() / 2 - pan.x) / zoom;
+      const y = (cy.height() / 2 - pan.y) / zoom;
+      const classes = `annotation-node ${addingKind === 'frame' ? 'frame-node' : 'text-label-node'}`;
+      cy.add({ data: { id, text, kind: addingKind }, position: { x, y }, classes });
+      const positions = loadPositions();
+      positions[id] = { x, y };
+      savePositions(positions);
+    }
+    onAddTextLabel(id, text, addingKind);
+    setAddLabelText('');
+    setAddingKind(null);
+  }, [addLabelText, addingKind, onAddTextLabel]);
+
+  const handleSaveEditingLabel = useCallback(() => {
+    if (!editingLabel) return;
+    const cy = cyRef.current;
+    if (cy) cy.getElementById(editingLabel.id).data('text', editingLabel.text);
+    onUpdateTextLabel(editingLabel.id, editingLabel.text);
+    setEditingLabel(null);
+  }, [editingLabel, onUpdateTextLabel]);
+
+  const handleDeleteEditingLabel = useCallback(() => {
+    if (!editingLabel) return;
+    cyRef.current?.getElementById(editingLabel.id).remove();
+    onDeleteTextLabel(editingLabel.id);
+    setEditingLabel(null);
+  }, [editingLabel, onDeleteTextLabel]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ── Touch overlay handlers (iPad / touch devices, select mode only) ─────────
+  const handleOverlayTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const cy = cyRef.current;
+    if (!cy) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      const hitNode = cy.nodes(BOOK_NODE_SELECTOR).filter((node) => {
+        const bb = node.renderedBoundingBox();
+        return x >= bb.x1 && x <= bb.x2 && y >= bb.y1 && y <= bb.y2;
+      }).first() as cytoscape.NodeSingular;
+
+      if (hitNode.length > 0) {
+        const nodeId = hitNode.id();
+        const nodePos = hitNode.position();
+        const startPositions = new Map<string, { x: number; y: number }>();
+        if (hitNode.selected()) {
+          cy.nodes(':selected').forEach((n) => { startPositions.set(n.id(), { ...n.position() }); });
+        } else {
+          startPositions.set(nodeId, { ...nodePos });
+        }
+        selectedNodesStartRef.current = startPositions;
+        overlayDragNodeRef.current = {
+          nodeId,
+          startNodeX: nodePos.x,
+          startNodeY: nodePos.y,
+          startTouchX: touch.clientX,
+          startTouchY: touch.clientY,
+        };
+        dragStartRef.current = null;
+        dragBoxRef.current = null;
+      } else {
+        overlayDragNodeRef.current = null;
+        selectedNodesStartRef.current = new Map();
+        dragStartRef.current = { x, y };
+        dragBoxRef.current = { x, y, w: 0, h: 0 };
+      }
+      pinchRef.current = null;
+
+    } else if (e.touches.length === 2) {
+      dragStartRef.current = null;
+      dragBoxRef.current = null;
+      setDragBox(null);
+      overlayDragNodeRef.current = null;
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      pinchRef.current = {
+        dist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+        midX: (t1.clientX + t2.clientX) / 2,
+        midY: (t1.clientY + t2.clientY) / 2,
+      };
+    }
+  }, []);
+
+  const handleOverlayTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const cy = cyRef.current;
+    if (!cy) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      if (overlayDragNodeRef.current) {
+        const { startTouchX, startTouchY } = overlayDragNodeRef.current;
+        const zoom = cy.zoom();
+        const dx = (touch.clientX - startTouchX) / zoom;
+        const dy = (touch.clientY - startTouchY) / zoom;
+        cy.batch(() => {
+          selectedNodesStartRef.current.forEach((startPos, nodeId) => {
+            const node = cy.getElementById(nodeId);
+            if (node.length) node.position({ x: startPos.x + dx, y: startPos.y + dy });
+          });
+        });
+      } else if (dragStartRef.current) {
+        const start = dragStartRef.current;
+        const box = {
+          x: Math.min(start.x, x),
+          y: Math.min(start.y, y),
+          w: Math.abs(x - start.x),
+          h: Math.abs(y - start.y),
+        };
+        dragBoxRef.current = box;
+        setDragBox({ ...box });
+      }
+
+    } else if (e.touches.length === 2 && pinchRef.current) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const newDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const newMidX = (t1.clientX + t2.clientX) / 2;
+      const newMidY = (t1.clientY + t2.clientY) / 2;
+      const { dist: oldDist, midX: oldMidX, midY: oldMidY } = pinchRef.current;
+
+      if (oldDist > 0) {
+        cy.zoom({
+          level: Math.max(0.05, Math.min(10, cy.zoom() * (newDist / oldDist))),
+          renderedPosition: { x: newMidX - rect.left, y: newMidY - rect.top },
+        });
+      }
+      cy.panBy({ x: newMidX - oldMidX, y: newMidY - oldMidY });
+      setZoom(cy.zoom());
+      pinchRef.current = { dist: newDist, midX: newMidX, midY: newMidY };
+    }
+  }, []);
+
+  const handleOverlayTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const cy = cyRef.current;
+    if (!cy) return;
+
+    if (e.touches.length < 2) pinchRef.current = null;
+    if (e.touches.length > 0) return;
+
+    if (overlayDragNodeRef.current) {
+      const drag = overlayDragNodeRef.current;
+      const lastTouch = e.changedTouches[0];
+      const movedX = Math.abs(lastTouch.clientX - drag.startTouchX);
+      const movedY = Math.abs(lastTouch.clientY - drag.startTouchY);
+      if (movedX < 8 && movedY < 8) {
+        onSelectBookRef.current(drag.nodeId);
+      } else {
+        saveCurrentPositions(cy);
+      }
+      setZoom(cy.zoom());
+      overlayDragNodeRef.current = null;
+      selectedNodesStartRef.current = new Map();
+
+    } else if (dragStartRef.current) {
+      const box = dragBoxRef.current;
+      dragStartRef.current = null;
+      dragBoxRef.current = null;
+      setDragBox(null);
+
+      if (!box || (box.w < 10 && box.h < 10)) {
+        cy.elements().unselect();
+        return;
+      }
+      cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+        const bb = node.renderedBoundingBox();
+        const cx = (bb.x1 + bb.x2) / 2;
+        const cy2 = (bb.y1 + bb.y2) / 2;
+        if (cx >= box.x && cx <= box.x + box.w && cy2 >= box.y && cy2 <= box.y + box.h) {
+          node.select();
+        } else {
+          node.unselect();
+        }
+      });
+      setZoom(cy.zoom());
+    }
+  }, []);
+  // ────────────────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -336,94 +567,6 @@ export function BookGraph({
       });
     };
     container.addEventListener('wheel', handleWheel, { passive: false, capture: true });
-
-    // Touch-based box selection (iPad / touch devices)
-    const handleTouchStart = (e: TouchEvent) => {
-      if (!isSelectModeRef.current) return;
-
-      // 2-finger touch: cancel any in-progress box selection and let Cytoscape
-      // handle the pinch-zoom / two-finger pan normally
-      if (e.touches.length === 2) {
-        if (dragStartRef.current) {
-          dragStartRef.current = null;
-          dragBoxRef.current = null;
-          setDragBox(null);
-        }
-        return;
-      }
-
-      if (e.touches.length !== 1) return;
-      const cyInst = cyRef.current;
-      if (!cyInst) return;
-      const touch = e.touches[0];
-      const rect = container.getBoundingClientRect();
-      const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top;
-      const onNode = cyInst.nodes(BOOK_NODE_SELECTOR).some((node) => {
-        const bb = node.renderedBoundingBox();
-        return x >= bb.x1 && x <= bb.x2 && y >= bb.y1 && y <= bb.y2;
-      });
-      if (onNode) return;
-
-      // Do NOT preventDefault/stopImmediatePropagation here.
-      // Cytoscape must see this touchstart so it can track both fingers
-      // when a second finger is added (pinch-zoom).
-      dragStartRef.current = { x, y };
-      dragBoxRef.current = { x, y, w: 0, h: 0 };
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      // 2-finger move: always pass through for pinch-zoom / two-finger pan
-      if (e.touches.length !== 1) return;
-      if (!dragStartRef.current) return;
-      // Single-finger drag: intercept here (not on touchstart) so Cytoscape
-      // already has the first touchstart recorded for multi-finger tracking
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const touch = e.touches[0];
-      const rect = container.getBoundingClientRect();
-      const currX = touch.clientX - rect.left;
-      const currY = touch.clientY - rect.top;
-      const start = dragStartRef.current;
-      const box = {
-        x: Math.min(start.x, currX),
-        y: Math.min(start.y, currY),
-        w: Math.abs(currX - start.x),
-        h: Math.abs(currY - start.y),
-      };
-      dragBoxRef.current = box;
-      setDragBox({ ...box });
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      if (!dragStartRef.current) return;
-      // Prevent Cytoscape from firing a background tap (which would deselect)
-      e.stopImmediatePropagation();
-      dragStartRef.current = null;
-      const box = dragBoxRef.current;
-      dragBoxRef.current = null;
-      setDragBox(null);
-      const cyInst = cyRef.current;
-      if (!cyInst) return;
-      if (!box || (box.w < 10 && box.h < 10)) {
-        cyInst.elements().unselect();
-        return;
-      }
-      cyInst.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
-        const bb = node.renderedBoundingBox();
-        const cx = (bb.x1 + bb.x2) / 2;
-        const cy2 = (bb.y1 + bb.y2) / 2;
-        if (cx >= box.x && cx <= box.x + box.w && cy2 >= box.y && cy2 <= box.y + box.h) {
-          node.select();
-        } else {
-          node.unselect();
-        }
-      });
-    };
-
-    container.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true });
-    container.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
-    container.addEventListener('touchend', handleTouchEnd, { capture: true });
 
     const cy = cytoscape({
       container,
@@ -497,6 +640,53 @@ export function BookGraph({
           selector: 'edge.hidden',
           style: { display: 'none' },
         },
+        {
+          selector: 'node.text-label-node',
+          style: {
+            shape: 'round-rectangle',
+            'background-color': '#0F172A',
+            'background-opacity': 0.88,
+            'border-color': '#64748B',
+            'border-width': 1,
+            'border-style': 'dashed',
+            color: '#CBD5E1',
+            'font-size': 13,
+            label: 'data(text)',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '220px',
+            width: 'label',
+            height: 'label',
+            padding: '8px',
+            'z-index': 3,
+          },
+        },
+        {
+          selector: 'node.frame-node',
+          style: {
+            shape: 'round-rectangle',
+            'background-color': '#1E293B',
+            'background-opacity': 0.35,
+            'border-color': '#475569',
+            'border-width': 2,
+            'border-style': 'solid',
+            color: '#94A3B8',
+            'font-size': 12,
+            'font-weight': 700,
+            label: 'data(text)',
+            'text-valign': 'top',
+            'text-halign': 'center',
+            'text-margin-y': 10,
+            width: 340,
+            height: 260,
+            'z-index': 0,
+          },
+        },
+        {
+          selector: 'node.annotation-node:selected',
+          style: { 'border-color': '#3B82F6', 'border-width': 2 },
+        },
       ],
       layout: { name: 'preset' },
       boxSelectionEnabled: false,
@@ -510,14 +700,23 @@ export function BookGraph({
 
     cy.on('zoom', () => setZoom(cy.zoom()));
     cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (event) => onSelectBookRef.current(event.target.id()));
-    cy.on('dragfree', `node${BOOK_NODE_SELECTOR}`, debouncedSave);
+    cy.on('tap', `node${ANNOTATION_SELECTOR}`, (event) => {
+      if (isSelectModeRef.current) return;
+      const node = event.target;
+      const rp = node.renderedPosition();
+      setEditingLabel({
+        id: node.id(),
+        text: node.data('text') ?? '',
+        kind: node.data('kind') ?? 'text',
+        x: rp.x,
+        y: rp.y,
+      });
+    });
+    cy.on('dragfree', `node${BOOK_NODE_SELECTOR}, node${ANNOTATION_SELECTOR}`, debouncedSave);
 
     cyRef.current = cy;
     return () => {
       container.removeEventListener('wheel', handleWheel, { capture: true });
-      container.removeEventListener('touchstart', handleTouchStart, { capture: true });
-      container.removeEventListener('touchmove', handleTouchMove, { capture: true });
-      container.removeEventListener('touchend', handleTouchEnd, { capture: true });
       if (saveTimer) clearTimeout(saveTimer);
       cy.destroy();
       cyRef.current = null;
@@ -697,9 +896,42 @@ export function BookGraph({
     setZoom(currentZoom);
   }, [focusRequest]);
 
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const existingIds = new Set(cy.nodes(ANNOTATION_SELECTOR).map((n) => n.id()));
+    const newIds = new Set(textLabels.map((l) => l.id));
+    cy.nodes(ANNOTATION_SELECTOR).forEach((n) => { if (!newIds.has(n.id())) n.remove(); });
+    const saved = loadPositions();
+    for (const label of textLabels) {
+      if (existingIds.has(label.id)) {
+        cy.getElementById(label.id).data('text', label.text);
+      } else {
+        const pos = saved[label.id] ?? (() => {
+          const pan = cy.pan(); const zoom = cy.zoom();
+          return { x: (cy.width() / 2 - pan.x) / zoom, y: (cy.height() / 2 - pan.y) / zoom };
+        })();
+        const classes = `annotation-node ${label.kind === 'frame' ? 'frame-node' : 'text-label-node'}`;
+        cy.add({ data: { id: label.id, text: label.text, kind: label.kind }, position: pos, classes });
+      }
+    }
+  }, [textLabels]);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%', cursor: isSelectMode ? 'crosshair' : 'default' }} />
+
+      {/* Touch overlay: enabled by CSS only on coarse pointer devices */}
+      {isSelectMode && (
+        <div
+          className="touch-select-overlay"
+          onTouchStart={handleOverlayTouchStart}
+          onTouchMove={handleOverlayTouchMove}
+          onTouchEnd={handleOverlayTouchEnd}
+          onTouchCancel={handleOverlayTouchEnd}
+        />
+      )}
+
       {dragBox && dragBox.w > 4 && (
         <div style={{
           position: 'absolute',
@@ -711,7 +943,7 @@ export function BookGraph({
           background: 'rgba(59,130,246,0.10)',
           borderRadius: 2,
           pointerEvents: 'none',
-          zIndex: 4,
+          zIndex: 6,
         }} />
       )}
 
@@ -722,6 +954,59 @@ export function BookGraph({
       >
         {isSelectMode ? '✕ 選択中' : '⬚ 囲む'}
       </button>
+
+      {/* Annotation buttons */}
+      <div className="annotation-btns">
+        <button className={`annotation-btn${addingKind === 'text' ? ' active' : ''}`} onClick={() => { setAddingKind((k) => k === 'text' ? null : 'text'); setAddLabelText(''); }} title="テキストをキャンバスに追加">📝 テキスト</button>
+        <button className={`annotation-btn${addingKind === 'frame' ? ' active' : ''}`} onClick={() => { setAddingKind((k) => k === 'frame' ? null : 'frame'); setAddLabelText(''); }} title="四角い枠をキャンバスに追加">⬜ 枠</button>
+      </div>
+
+      {/* Add annotation panel */}
+      {addingKind && (
+        <div className="annotation-add-panel">
+          <div className="annotation-add-hint">
+            {addingKind === 'frame' ? '枠のタイトル（省略可）' : 'テキストを入力'}
+          </div>
+          <textarea
+            className="annotation-textarea"
+            autoFocus
+            placeholder={addingKind === 'frame' ? 'タイトル…' : 'テキスト…'}
+            value={addLabelText}
+            onChange={(e) => setAddLabelText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') { setAddingKind(null); setAddLabelText(''); }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleConfirmAddLabel(); }
+            }}
+            rows={addingKind === 'text' ? 3 : 1}
+          />
+          <div className="annotation-add-actions">
+            <button className="btn-primary" onClick={handleConfirmAddLabel} disabled={addingKind === 'text' && !addLabelText.trim()}>追加</button>
+            <button className="annotation-cancel-btn" onClick={() => { setAddingKind(null); setAddLabelText(''); }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit annotation panel */}
+      {editingLabel && (
+        <div className="annotation-edit-panel" style={{ left: Math.max(8, editingLabel.x - 110), top: Math.max(8, editingLabel.y - 130) }}>
+          <textarea
+            className="annotation-textarea"
+            autoFocus
+            value={editingLabel.text}
+            onChange={(e) => setEditingLabel({ ...editingLabel, text: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setEditingLabel(null);
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEditingLabel(); }
+            }}
+            rows={3}
+          />
+          <div className="annotation-add-actions">
+            <button className="btn-primary" onClick={handleSaveEditingLabel}>保存</button>
+            <button className="annotation-delete-btn" onClick={handleDeleteEditingLabel}>削除</button>
+            <button className="annotation-cancel-btn" onClick={() => setEditingLabel(null)}>✕</button>
+          </div>
+        </div>
+      )}
 
       {/* Favorites panel */}
       <div className="fav-panel">

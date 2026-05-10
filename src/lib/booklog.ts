@@ -95,7 +95,7 @@ function bookFromRow(row: string[], indexes = BOOKLOG_POS): Book | null {
     title,
     authors: author ? [author] : [],
     authorKeys: [],
-    subjects: [],
+    subjects: category ? [category] : [],
     series: [],
     olKey: '',
     isbn,

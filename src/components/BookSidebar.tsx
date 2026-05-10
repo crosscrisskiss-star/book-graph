@@ -26,7 +26,7 @@ const TEXT = {
   expandSection: '\u95a2\u4fc2\u6027\u3092\u5c55\u958b',
   existingRels: '\u65e2\u5b58\u306e\u95a2\u4fc2',
   manualSection: '\u624b\u52d5\u3067\u95a2\u4fc2\u3092\u8ffd\u52a0',
-  manualTarget: '\u672c\u306e\u30bf\u30a4\u30c8\u30eb\uff08\u30b0\u30e9\u30d5\u5185\uff09',
+  manualTarget: '\u30bf\u30a4\u30c8\u30eb\u3067\u691c\u7d22\u3057\u3066\u9078\u629e',
   manualLabel: '\u30e9\u30d9\u30eb\uff08\u4efb\u610f\uff09',
   add: '\u8ffd\u52a0',
   adding: '\u53d6\u5f97\u4e2d...',
@@ -62,6 +62,27 @@ function safeList(values: string[] | undefined): string[] {
   return Array.isArray(values) ? values : [];
 }
 
+function SubjectAddRow({ currentSubjects, onAdd }: { currentSubjects: string[]; onAdd: (s: string) => void }) {
+  const [value, setValue] = useState('');
+  function commit() {
+    const s = value.trim();
+    if (s && !currentSubjects.includes(s)) onAdd(s);
+    setValue('');
+  }
+  return (
+    <div className="subject-add-row">
+      <input
+        className="subject-add-input"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && commit()}
+        placeholder="ジャンルを追加…"
+      />
+      <button className="subject-add-btn" onClick={commit} disabled={!value.trim()}>+</button>
+    </div>
+  );
+}
+
 export function BookSidebar({
   book,
   relationships,
@@ -79,7 +100,9 @@ export function BookSidebar({
   const [expanding, setExpanding] = useState<RelationshipType | null>(null);
   const [addingRec, setAddingRec] = useState(false);
   const [recMessage, setRecMessage] = useState('');
-  const [manualTarget, setManualTarget] = useState('');
+  const [manualQuery, setManualQuery] = useState('');
+  const [manualTargetId, setManualTargetId] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [addingCategory, setAddingCategory] = useState(false);
   const [categoryInput, setCategoryInput] = useState('');
   const [manualType, setManualType] = useState<RelationshipType>('recommendation');
@@ -212,21 +235,22 @@ export function BookSidebar({
     setCategoryInput('');
   }
 
-  function addManual() {
-    const needle = manualTarget.trim().toLowerCase();
-    const target = allBooks.find((item) => item.title.toLowerCase().includes(needle));
-    if (!target || target.id === book.id) {
-      window.alert(TEXT.notFound);
-      return;
-    }
+  const manualSuggestions = manualQuery.trim().length > 0
+    ? allBooks
+        .filter((b) => b.id !== book.id && b.title.toLowerCase().includes(manualQuery.trim().toLowerCase()))
+        .slice(0, 8)
+    : [];
 
+  function addManual() {
+    if (!manualTargetId) return;
     onAddRelationship({
       source: book.id,
-      target: target.id,
+      target: manualTargetId,
       type: manualType,
       label: manualLabel.trim() || undefined,
     });
-    setManualTarget('');
+    setManualQuery('');
+    setManualTargetId(null);
     setManualLabel('');
   }
 
@@ -251,6 +275,25 @@ export function BookSidebar({
       {series.length > 0 && (
         <div className="sidebar-meta">{TEXT.series}: {series.join(', ')}</div>
       )}
+
+      {subjects.length > 0 && (
+        <div className="sidebar-subjects">
+          {subjects.map((subject) => (
+            <span key={subject} className="subject-tag">
+              {subject}
+              <button
+                className="subject-tag-remove"
+                onClick={() => onUpdateBook(book.id, { subjects: subjects.filter((s) => s !== subject) })}
+                title="削除"
+              >×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <SubjectAddRow
+        currentSubjects={subjects}
+        onAdd={(s) => onUpdateBook(book.id, { subjects: [...subjects, s] })}
+      />
 
       <button
         className={`btn-read-toggle${book.read ? ' read' : ''}`}
@@ -370,14 +413,6 @@ export function BookSidebar({
         {TEXT.deleteBook}
       </button>
 
-      {subjects.length > 0 && (
-        <div className="sidebar-subjects">
-          {subjects.slice(0, 8).map((subject) => (
-            <span key={subject} className="subject-tag">{subject}</span>
-          ))}
-        </div>
-      )}
-
       <div className="sidebar-section-title">{TEXT.expandSection}</div>
       <div className="expand-buttons">
         {EXPAND_TYPES.filter((item) => enabledTypes.has(item.type)).map(({ type, label }) => (
@@ -415,12 +450,30 @@ export function BookSidebar({
 
       <div className="sidebar-section-title">{TEXT.manualSection}</div>
       <div className="manual-form">
-        <input
-          className="manual-input"
-          placeholder={TEXT.manualTarget}
-          value={manualTarget}
-          onChange={(e) => setManualTarget(e.target.value)}
-        />
+        <div className="manual-target-wrap">
+          <input
+            className={`manual-input${manualTargetId ? ' selected' : ''}`}
+            placeholder={TEXT.manualTarget}
+            value={manualQuery}
+            onChange={(e) => { setManualQuery(e.target.value); setManualTargetId(null); setShowSuggestions(true); }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+          />
+          {showSuggestions && manualSuggestions.length > 0 && (
+            <ul className="manual-suggestions">
+              {manualSuggestions.map((b) => (
+                <li
+                  key={b.id}
+                  className="manual-suggestion-item"
+                  onMouseDown={() => { setManualQuery(b.title); setManualTargetId(b.id); setShowSuggestions(false); }}
+                >
+                  <span className="ms-title">{b.title}</span>
+                  {b.authors?.[0] && <span className="ms-author">{b.authors[0]}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <select
           className="manual-select"
           value={manualType}
@@ -436,7 +489,7 @@ export function BookSidebar({
           value={manualLabel}
           onChange={(e) => setManualLabel(e.target.value)}
         />
-        <button className="btn-primary" onClick={addManual}>{TEXT.add}</button>
+        <button className="btn-primary" onClick={addManual} disabled={!manualTargetId}>{TEXT.add}</button>
       </div>
     </aside>
   );
