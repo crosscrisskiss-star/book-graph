@@ -6,7 +6,7 @@ import { getBooksByAuthorNDL, getBooksBySubjectNDL, searchBooksNDL } from '../li
 import { searchBooksGoogle } from '../lib/googleBooks';
 import { booklogSearchUrl } from '../lib/booklogLink';
 import { LibraryPanel } from './LibraryPanel';
-import { getGeminiRecommendations } from '../lib/gemini';
+import { getGeminiRecommendations, getGeminiSummary } from '../lib/gemini';
 
 function amazonUrl(book: Book): string {
   const isbn = book.isbn?.replace(/[-\s]/g, '');
@@ -85,6 +85,8 @@ export function BookSidebar({
   const [manualType, setManualType] = useState<RelationshipType>('recommendation');
   const [manualLabel, setManualLabel] = useState('');
   const [showLibrary, setShowLibrary] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState('');
 
   const authors = safeList(book.authors);
   const authorKeys = safeList(book.authorKeys);
@@ -182,6 +184,24 @@ export function BookSidebar({
     }
   }
 
+  async function handleSummarize() {
+    setSummarizing(true);
+    setSummaryError('');
+    try {
+      const summary = await getGeminiSummary(
+        book.title,
+        authors[0] ?? '',
+        subjects,
+        book.description
+      );
+      onUpdateBook(book.id, { aiSummary: summary });
+    } catch (e) {
+      setSummaryError(e instanceof Error ? e.message : 'エラーが発生しました');
+    } finally {
+      setSummarizing(false);
+    }
+  }
+
   function confirmAddCategory() {
     const cat = categoryInput.trim();
     if (cat) {
@@ -238,6 +258,29 @@ export function BookSidebar({
       >
         {book.read ? '✓ 既読' : '○ 未読'}
       </button>
+      <div className="sidebar-section-title">AI要約</div>
+      {book.aiSummary ? (
+        <div className="ai-summary-box">
+          <p className="ai-summary-text">{book.aiSummary}</p>
+          <button
+            className="btn-ai-summary-regen"
+            onClick={handleSummarize}
+            disabled={summarizing}
+          >
+            {summarizing ? '生成中...' : '再生成'}
+          </button>
+        </div>
+      ) : (
+        <button
+          className="btn-ai-summary"
+          onClick={handleSummarize}
+          disabled={summarizing}
+        >
+          {summarizing ? '生成中...' : 'Geminiで要約する'}
+        </button>
+      )}
+      {summaryError && <div className="ai-summary-error">{summaryError}</div>}
+
       <div className="sidebar-section-title">評価・読書メモ</div>
       <div className="book-note-form">
         <label className="book-note-label">

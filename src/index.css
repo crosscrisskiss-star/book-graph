@@ -796,6 +796,51 @@ body {
   margin-top: 0;
 }
 
+/* AI Summary */
+.ai-summary-box {
+  background: #0F172A;
+  border: 1px solid #1E3A5F;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 8px;
+}
+.ai-summary-text {
+  font-size: 12px;
+  line-height: 1.75;
+  color: #CBD5E1;
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+.btn-ai-summary {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 8px;
+  background: #0F2A4A;
+  border: 1px dashed #2563EB;
+  border-radius: 8px;
+  color: #60A5FA;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s;
+}
+.btn-ai-summary:hover:not(:disabled) { background: #1E3A5F; }
+.btn-ai-summary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ai-summary-regen {
+  background: none;
+  border: none;
+  color: #475569;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.btn-ai-summary-regen:hover:not(:disabled) { color: #94A3B8; }
+.btn-ai-summary-regen:disabled { opacity: 0.5; cursor: not-allowed; }
+.ai-summary-error { font-size: 11px; color: #FCA5A5; padding: 2px 0 6px; }
+
 .btn-recommend2 {
   display: block;
   width: 100%;

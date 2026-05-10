@@ -15,6 +15,7 @@ export interface Book {
   read?: boolean;
   rating?: number;
   privateMemo?: string;
+  aiSummary?: string;
 }
 
 export type RelationshipType =
