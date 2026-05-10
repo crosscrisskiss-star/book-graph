@@ -335,11 +335,27 @@ body {
 .empty-icon { font-size: 48px; }
 .empty-text { font-size: 14px; text-align: center; max-width: 280px; }
 
-/* Cytoscape box-selection rectangle */
-.cytoscape-box-selection {
-  background: rgba(59, 130, 246, 0.12);
-  border: 1.5px solid #3B82F6;
-  border-radius: 2px;
+/* Select-mode toggle button */
+.select-mode-btn {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 10;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #94A3B8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.select-mode-btn:hover { color: #F1F5F9; border-color: #475569; }
+.select-mode-btn.active {
+  background: rgba(59, 130, 246, 0.22);
+  border-color: #3B82F6;
+  color: #93C5FD;
 }
 
 /* Sync overlay */

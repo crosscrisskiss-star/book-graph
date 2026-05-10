@@ -216,6 +216,7 @@ export function BookGraph({
   const onSelectBookRef = useRef(onSelectBook);
   const positionsLoadedRef = useRef(false);
   const [zoom, setZoom] = useState(1);
+  const [isSelectMode, setIsSelectMode] = useState(false);
 
   useEffect(() => {
     booksRef.current = data.books;
@@ -249,6 +250,19 @@ export function BookGraph({
     if (!cy) return;
     fitVisible(cy);
     setZoom(cy.zoom());
+  }, []);
+
+  const toggleSelectMode = useCallback(() => {
+    setIsSelectMode((prev) => {
+      const next = !prev;
+      const cy = cyRef.current;
+      if (cy) {
+        cy.panningEnabled(!next);
+        cy.boxSelectionEnabled(next);
+        if (!next) cy.elements().unselect();
+      }
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -328,7 +342,7 @@ export function BookGraph({
         },
       ],
       layout: { name: 'preset' },
-      boxSelectionEnabled: true,
+      boxSelectionEnabled: false,
     });
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -524,7 +538,14 @@ export function BookGraph({
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={containerRef} style={{ width: '100%', height: '100%', cursor: isSelectMode ? 'crosshair' : 'default' }} />
+      <button
+        className={`select-mode-btn${isSelectMode ? ' active' : ''}`}
+        onClick={toggleSelectMode}
+        title={isSelectMode ? '選択モード中（クリックで移動モードへ）' : 'クリックで複数選択モードへ'}
+      >
+        {isSelectMode ? '✕ 選択中' : '⬚ 囲む'}
+      </button>
       <div className="zoom-overlay">
         <span className="zoom-pct">{Math.round(zoom * 100)}%</span>
         <button className="zoom-reset-btn" onClick={handleResetZoom} title="100%に戻す">↺</button>
