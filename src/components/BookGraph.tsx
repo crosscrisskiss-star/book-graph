@@ -22,6 +22,7 @@ interface Props {
   onAddDrawStroke: (stroke: DrawStroke) => void;
   onUndoDrawStroke: () => void;
   onClearDrawStrokes: () => void;
+  onSetDrawStrokes: (strokes: DrawStroke[]) => void;
   categories: string[];
   onBulkUpdateBooks: (ids: string[], patch: Partial<import('../types').Book>) => void;
 }
@@ -241,6 +242,7 @@ export function BookGraph({
   onAddDrawStroke,
   onUndoDrawStroke,
   onClearDrawStrokes,
+  onSetDrawStrokes,
   categories,
   onBulkUpdateBooks,
 }: Props) {
@@ -355,7 +357,7 @@ export function BookGraph({
     cy.nodes(`${BOOK_NODE_SELECTOR}, ${ANNOTATION_SELECTOR}`).forEach((node) => {
       positions[node.id()] = { ...node.position() };
     });
-    saveFavorite(newFavName.trim(), positions);
+    saveFavorite(newFavName.trim(), positions, drawStrokesRef.current);
     setFavorites(loadFavorites());
     setNewFavName('');
   }, [newFavName]);
@@ -372,8 +374,9 @@ export function BookGraph({
     fitVisible(cy);
     setZoom(cy.zoom());
     saveCurrentPositions(cy);
+    onSetDrawStrokes(fav.drawStrokes ?? []);
     setShowFavPanel(false);
-  }, []);
+  }, [onSetDrawStrokes]);
 
   const handleDeleteFavorite = useCallback((id: string) => {
     deleteFavorite(id);

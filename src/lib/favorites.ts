@@ -1,5 +1,5 @@
 import type { PositionMap } from './positions';
-import type { FavoriteSyncItem } from '../types';
+import type { DrawStroke, FavoriteSyncItem } from '../types';
 
 export type FavoriteLayout = FavoriteSyncItem & { positions: PositionMap };
 
@@ -13,9 +13,9 @@ export function loadFavorites(): FavoriteLayout[] {
   }
 }
 
-export function saveFavorite(name: string, positions: PositionMap): void {
+export function saveFavorite(name: string, positions: PositionMap, drawStrokes?: DrawStroke[]): void {
   const list = loadFavorites();
-  list.push({ id: Date.now().toString(), name, positions });
+  list.push({ id: Date.now().toString(), name, positions, drawStrokes: drawStrokes ?? [] });
   try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* quota */ }
 }
 

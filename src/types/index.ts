@@ -42,6 +42,7 @@ export interface FavoriteSyncItem {
   id: string;
   name: string;
   positions: PositionSyncMap;
+  drawStrokes?: DrawStroke[];
 }
 
 export interface DrawStroke {

@@ -431,6 +431,10 @@ export default function App() {
     updateGraph((prev) => ({ ...prev, drawStrokes: [] }));
   }
 
+  function setDrawStrokes(strokes: DrawStroke[]) {
+    updateGraph((prev) => ({ ...prev, drawStrokes: strokes }));
+  }
+
   function addCategory(cat: string) {
     updateGraph((prev) => {
       const existing = prev.categories ?? [];
@@ -745,6 +749,7 @@ export default function App() {
               onAddDrawStroke={addDrawStroke}
               onUndoDrawStroke={undoDrawStroke}
               onClearDrawStrokes={clearDrawStrokes}
+              onSetDrawStrokes={setDrawStrokes}
               categories={graph.categories ?? []}
               onBulkUpdateBooks={(ids, patch) => {
                 updateGraph((prev) => ({
