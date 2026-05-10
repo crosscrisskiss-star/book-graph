@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Book, DrawStroke, GraphData, Relationship, RelationshipType } from './types';
 import { loadGraph, saveGraph } from './lib/storage';
+import { loadSheets, saveSheets, loadCurrentSheetId, saveCurrentSheetId, deleteSheetData } from './lib/sheets';
+import type { Sheet } from './lib/sheets';
 import { dedupeRelationships, detectRelationships, detectAllRelationships } from './lib/relationships';
 import { BookGraph } from './components/BookGraph';
 import { BookSearch } from './components/BookSearch';
@@ -156,7 +158,10 @@ function BookList({ books, filteredBooks, selectedId, onSelect, categories, filt
 }
 
 export default function App() {
-  const [graph, setGraph] = useState<GraphData>(loadGraph);
+  const [sheets, setSheets] = useState<Sheet[]>(loadSheets);
+  const [currentSheetId, setCurrentSheetId] = useState(loadCurrentSheetId);
+  const currentSheetIdRef = useRef(currentSheetId);
+  const [graph, setGraph] = useState<GraphData>(() => loadGraph(loadCurrentSheetId()));
   const [enabledTypes, setEnabledTypes] = useState<Set<RelationshipType>>(
     new Set(ALL_TYPES)
   );
@@ -180,10 +185,14 @@ export default function App() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    currentSheetIdRef.current = currentSheetId;
+  }, [currentSheetId]);
+
   function updateGraph(fn: (prev: GraphData) => GraphData) {
     setGraph((prev) => {
       const next = fn(prev);
-      saveGraph(next);
+      saveGraph(next, currentSheetIdRef.current);
       return next;
     });
   }
@@ -193,7 +202,7 @@ export default function App() {
     if (!syncCode || !isSyncConfigured()) return;
     setSyncStatus('loading');
     cloudLoad(syncCode).then((data) => {
-      if (data) { setGraph(data); saveGraph(data); setLastSynced(new Date()); }
+      if (data) { setGraph(data); saveGraph(data, currentSheetIdRef.current); setLastSynced(new Date()); }
       setSyncStatus('idle');
     }).catch((e: unknown) => {
       console.error('[sync] load failed:', e);
@@ -452,6 +461,41 @@ export default function App() {
     setSidebarBookId(null);
   }
 
+  function switchSheet(id: string) {
+    currentSheetIdRef.current = id;
+    setCurrentSheetId(id);
+    saveCurrentSheetId(id);
+    setGraph(loadGraph(id));
+    setSelectedId(null);
+    setSidebarBookId(null);
+    setListFilters({ title: '', author: '', publisher: '', category: [], rating: '', subject: '' });
+  }
+
+  function addSheet(name: string) {
+    const id = `sheet_${Date.now()}`;
+    const updated = [...sheets, { id, name }];
+    setSheets(updated);
+    saveSheets(updated);
+    switchSheet(id);
+  }
+
+  function renameSheet(id: string, name: string) {
+    const updated = sheets.map((s) => s.id === id ? { ...s, name } : s);
+    setSheets(updated);
+    saveSheets(updated);
+  }
+
+  function deleteSheet(id: string) {
+    if (sheets.length <= 1) return;
+    const target = sheets.find((s) => s.id === id);
+    if (!window.confirm(`「${target?.name ?? id}」を削除しますか？`)) return;
+    deleteSheetData(id);
+    const updated = sheets.filter((s) => s.id !== id);
+    setSheets(updated);
+    saveSheets(updated);
+    if (currentSheetId === id) switchSheet(updated[0].id);
+  }
+
   function autoDetectRelationships() {
     const newRels = detectAllRelationships(graph.books, enabledTypes);
     const existingIds = new Set(graph.relationships.map((r) => r.id));
@@ -545,7 +589,7 @@ export default function App() {
             patches.has(book.id) ? { ...book, ...patches.get(book.id) } : book
           ),
         };
-        saveGraph(next);
+        saveGraph(next, currentSheetIdRef.current);
         return next;
       });
     }
@@ -671,7 +715,7 @@ export default function App() {
                   onClick={() => {
                     setSyncStatus('loading');
                     cloudLoad(syncCode!).then((data) => {
-                      if (data) { setGraph(data); saveGraph(data); setLastSynced(new Date()); }
+                      if (data) { setGraph(data); saveGraph(data, currentSheetIdRef.current); setLastSynced(new Date()); }
                       setSyncStatus('idle');
                     }).catch((e: unknown) => { console.error('[sync] manual load:', e); setSyncStatus('error'); });
                   }}
@@ -709,6 +753,35 @@ export default function App() {
         </div>
       )}
 
+      <div className="sheet-tab-bar">
+        {sheets.map((sheet) => (
+          <button
+            key={sheet.id}
+            className={`sheet-tab${currentSheetId === sheet.id ? ' active' : ''}`}
+            onClick={() => switchSheet(sheet.id)}
+            onDoubleClick={() => {
+              const name = window.prompt('シート名を変更', sheet.name);
+              if (name?.trim() && name.trim() !== sheet.name) renameSheet(sheet.id, name.trim());
+            }}
+          >
+            {sheet.name}
+            {sheets.length > 1 && (
+              <span
+                className="sheet-tab-close"
+                onClick={(e) => { e.stopPropagation(); deleteSheet(sheet.id); }}
+              >×</span>
+            )}
+          </button>
+        ))}
+        <button
+          className="sheet-add-btn"
+          onClick={() => {
+            const name = window.prompt('新しいシート名を入力してください', '新しいシート');
+            if (name?.trim()) addSheet(name.trim());
+          }}
+        >＋</button>
+      </div>
+
       <div className="main">
         <aside className={`left-panel${showLeftPanel ? '' : ' collapsed'}`}>
           <button
@@ -743,6 +816,8 @@ export default function App() {
             </div>
           ) : (
             <BookGraph
+              key={currentSheetId}
+              sheetId={currentSheetId}
               data={{ books: filteredBooks, relationships: graph.relationships }}
               enabledTypes={enabledTypes}
               selectedId={selectedId}

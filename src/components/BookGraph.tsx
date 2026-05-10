@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import cytoscape from 'cytoscape';
 import type { Book, GraphData, RelationshipType } from '../types';
 import { REL_COLORS } from '../types';
-import { loadPositions, savePositions, type PositionMap } from '../lib/positions';
+import { loadPositions, loadViewport, savePositions, saveViewport, type PositionMap } from '../lib/positions';
 import { loadFavorites, saveFavorite, deleteFavorite, type FavoriteLayout } from '../lib/favorites';
 import type { DrawStroke, TextLabel } from '../types';
 
@@ -25,6 +25,7 @@ interface Props {
   onSetDrawStrokes: (strokes: DrawStroke[]) => void;
   categories: string[];
   onBulkUpdateBooks: (ids: string[], patch: Partial<import('../types').Book>) => void;
+  sheetId: string;
 }
 
 type EditingLabel = { id: string; text: string; x: number; y: number; kind: 'text' | 'frame' };
@@ -118,12 +119,13 @@ function supportsTouchInput(): boolean {
 
 const ANNOTATION_SELECTOR = '.annotation-node';
 
-function saveCurrentPositions(cy: cytoscape.Core) {
-  const positions: PositionMap = loadPositions();
+function saveCurrentPositions(cy: cytoscape.Core, sheetId: string) {
+  const positions: PositionMap = loadPositions(sheetId);
   cy.nodes(`${BOOK_NODE_SELECTOR}, ${ANNOTATION_SELECTOR}`).forEach((node) => {
     positions[node.id()] = { ...node.position() };
   });
-  savePositions(positions);
+  savePositions(positions, sheetId);
+  saveViewport({ zoom: cy.zoom(), pan: cy.pan() }, sheetId);
 }
 
 function restoreSavedPositions(cy: cytoscape.Core, books: Book[], saved: PositionMap): boolean {
@@ -139,6 +141,14 @@ function restoreSavedPositions(cy: cytoscape.Core, books: Book[], saved: Positio
     }
   });
   return restored;
+}
+
+function restoreSavedViewport(cy: cytoscape.Core, sheetId: string): boolean {
+  const viewport = loadViewport(sheetId);
+  if (!viewport) return false;
+  cy.zoom(Math.max(0.05, Math.min(10, viewport.zoom)));
+  cy.pan({ ...viewport.pan });
+  return true;
 }
 
 function applyGridLayout(cy: cytoscape.Core) {
@@ -245,6 +255,7 @@ export function BookGraph({
   onSetDrawStrokes,
   categories,
   onBulkUpdateBooks,
+  sheetId,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
@@ -252,10 +263,11 @@ export function BookGraph({
   const groupByAuthorRef = useRef(groupByAuthor);
   const onSelectBookRef = useRef(onSelectBook);
   const positionsLoadedRef = useRef(false);
+  const layoutEffectMountedRef = useRef(false);
   const [zoom, setZoom] = useState(1);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const isSelectModeRef = useRef(false);
-  const [favorites, setFavorites] = useState<FavoriteLayout[]>(() => loadFavorites());
+  const [favorites, setFavorites] = useState<FavoriteLayout[]>(() => loadFavorites(sheetId));
   const [showFavPanel, setShowFavPanel] = useState(false);
   const [newFavName, setNewFavName] = useState('');
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -314,8 +326,8 @@ export function BookGraph({
     if (groupByAuthorRef.current) applyAuthorLayout(cy, booksRef.current);
     else applyGridLayout(cy);
     setZoom(cy.zoom());
-    saveCurrentPositions(cy);
-  }, []);
+    saveCurrentPositions(cy, sheetId);
+  }, [sheetId]);
 
   const scheduleLayout = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -357,10 +369,10 @@ export function BookGraph({
     cy.nodes(`${BOOK_NODE_SELECTOR}, ${ANNOTATION_SELECTOR}`).forEach((node) => {
       positions[node.id()] = { ...node.position() };
     });
-    saveFavorite(newFavName.trim(), positions, drawStrokesRef.current);
-    setFavorites(loadFavorites());
+    saveFavorite(newFavName.trim(), positions, drawStrokesRef.current, sheetId);
+    setFavorites(loadFavorites(sheetId));
     setNewFavName('');
-  }, [newFavName]);
+  }, [newFavName, sheetId]);
 
   const handleRestoreFavorite = useCallback((fav: FavoriteLayout) => {
     const cy = cyRef.current;
@@ -373,15 +385,15 @@ export function BookGraph({
     });
     fitVisible(cy);
     setZoom(cy.zoom());
-    saveCurrentPositions(cy);
+    saveCurrentPositions(cy, sheetId);
     onSetDrawStrokes(fav.drawStrokes ?? []);
     setShowFavPanel(false);
-  }, [onSetDrawStrokes]);
+  }, [onSetDrawStrokes, sheetId]);
 
   const handleDeleteFavorite = useCallback((id: string) => {
-    deleteFavorite(id);
-    setFavorites(loadFavorites());
-  }, []);
+    deleteFavorite(id, sheetId);
+    setFavorites(loadFavorites(sheetId));
+  }, [sheetId]);
 
   // ── Drawing ───────────────────────────────────────────────────────────────────
   useEffect(() => { drawColorRef.current = drawColor; }, [drawColor]);
@@ -423,7 +435,7 @@ export function BookGraph({
         ctx!.save();
         if (s.eraser) {
           ctx!.globalCompositeOperation = 'destination-out';
-          renderStroke(s.points, 'rgba(0,0,0,1)', s.width * 6);
+          renderStroke(s.points, 'rgba(0,0,0,1)', s.width * zoom);
         } else {
           ctx!.globalCompositeOperation = 'source-over';
           renderStroke(s.points, s.color, s.width);
@@ -445,7 +457,15 @@ export function BookGraph({
     const sy = touch.clientY - rect.top;
     const mx = (sx - panRef.current.x) / zoomRef.current;
     const my = (sy - panRef.current.y) / zoomRef.current;
-    currentStrokeRef.current = { id: `stroke_${Date.now()}`, points: [{ x: mx, y: my }], color: drawColorRef.current, width: drawWidthRef.current, eraser: isEraserModeRef.current };
+    const eraser = isEraserModeRef.current;
+    const screenWidth = eraser ? drawWidthRef.current * 12 : drawWidthRef.current;
+    currentStrokeRef.current = {
+      id: `stroke_${Date.now()}`,
+      points: [{ x: mx, y: my }],
+      color: drawColorRef.current,
+      width: eraser ? screenWidth / zoomRef.current : screenWidth,
+      eraser,
+    };
     isDrawingRef.current = true;
     scheduleDrawRedraw();
   }, [scheduleDrawRedraw]);
@@ -518,15 +538,15 @@ export function BookGraph({
     if (kind === 'text') nodeData.textMaxWidth = Math.max(40, w - 16);
     const classes = `annotation-node ${kind === 'frame' ? 'frame-node' : 'text-label-node'}`;
     cy.add({ data: nodeData, position: { x: cx, y: cyCoord }, classes });
-    const positions = loadPositions();
+    const positions = loadPositions(sheetId);
     positions[id] = { x: cx, y: cyCoord };
-    savePositions(positions);
+    savePositions(positions, sheetId);
     onAddTextLabel(id, '', kind, w, h);
     setPlacingKind(null);
     if (kind === 'text') {
       setEditingLabel({ id, text: '', kind, x: (sx1 + sx2) / 2, y: (sy1 + sy2) / 2 });
     }
-  }, [onAddTextLabel]);
+  }, [onAddTextLabel, sheetId]);
 
   const handleSaveEditingLabel = useCallback(() => {
     if (!editingLabel) return;
@@ -673,7 +693,7 @@ export function BookGraph({
       if (movedX < 8 && movedY < 8) {
         onSelectBookRef.current(drag.nodeId);
       } else {
-        saveCurrentPositions(cy);
+        saveCurrentPositions(cy, sheetId);
       }
       setZoom(cy.zoom());
       overlayDragNodeRef.current = null;
@@ -701,7 +721,7 @@ export function BookGraph({
       });
       setZoom(cy.zoom());
     }
-  }, []);
+  }, [sheetId]);
   // ────────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -858,7 +878,7 @@ export function BookGraph({
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
     const debouncedSave = () => {
       if (saveTimer) clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => saveCurrentPositions(cy), 80);
+      saveTimer = setTimeout(() => saveCurrentPositions(cy, sheetId), 80);
     };
 
     // Size the draw canvas to match the container
@@ -868,8 +888,18 @@ export function BookGraph({
       drawCanvas.height = container.offsetHeight;
     }
 
-    cy.on('zoom', () => { const z = cy.zoom(); zoomRef.current = z; setZoom(z); scheduleDrawRedraw(); });
-    cy.on('pan', () => { panRef.current = cy.pan(); scheduleDrawRedraw(); });
+    cy.on('zoom', () => {
+      const z = cy.zoom();
+      zoomRef.current = z;
+      setZoom(z);
+      scheduleDrawRedraw();
+      debouncedSave();
+    });
+    cy.on('pan', () => {
+      panRef.current = cy.pan();
+      scheduleDrawRedraw();
+      debouncedSave();
+    });
     cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (event) => onSelectBookRef.current(event.target.id()));
     cy.on('tap', `node${ANNOTATION_SELECTOR}`, (event) => {
       if (isSelectModeRef.current) return;
@@ -970,7 +1000,7 @@ export function BookGraph({
     }
 
     if (changed) {
-      const saved = loadPositions();
+      const saved = loadPositions(sheetId);
       if (!positionsLoadedRef.current) {
         positionsLoadedRef.current = true;
         const anySaved = data.books.length > 0 && data.books.some((b) => saved[b.id]);
@@ -998,9 +1028,10 @@ export function BookGraph({
                   });
                 });
               }
-              fitVisible(c);
+              const restoredViewport = restoreSavedViewport(c, sheetId);
+              if (!restoredViewport && unsaved.length > 0) fitVisible(c);
               setZoom(c.zoom());
-              saveCurrentPositions(c);
+              saveCurrentPositions(c, sheetId);
             });
           });
         } else {
@@ -1025,9 +1056,8 @@ export function BookGraph({
           });
         });
         if (added.length > 0) restoreSavedPositions(cy, data.books, saved);
-        fitVisible(cy);
         setZoom(cy.zoom());
-        saveCurrentPositions(cy);
+        saveCurrentPositions(cy, sheetId);
       } else {
         if (added.length > 0) restoreSavedPositions(cy, data.books, saved);
         if (added.length > 0) fitVisible(cy);
@@ -1038,7 +1068,7 @@ export function BookGraph({
     return () => {
       cancelled = true;
     };
-  }, [data.books, scheduleLayout]);
+  }, [data.books, scheduleLayout, sheetId]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -1073,6 +1103,10 @@ export function BookGraph({
   }, [data.relationships, enabledTypes]);
 
   useEffect(() => {
+    if (!layoutEffectMountedRef.current) {
+      layoutEffectMountedRef.current = true;
+      return;
+    }
     scheduleLayout();
   }, [groupByAuthor, layoutKey, scheduleLayout]);
 
@@ -1116,7 +1150,7 @@ export function BookGraph({
     const existingIds = new Set(cy.nodes(ANNOTATION_SELECTOR).map((n) => n.id()));
     const newIds = new Set(textLabels.map((l) => l.id));
     cy.nodes(ANNOTATION_SELECTOR).forEach((n) => { if (!newIds.has(n.id())) n.remove(); });
-    const saved = loadPositions();
+    const saved = loadPositions(sheetId);
     for (const label of textLabels) {
       if (existingIds.has(label.id)) {
         const node = cy.getElementById(label.id);
@@ -1141,7 +1175,7 @@ export function BookGraph({
         cy.add({ data: nodeData, position: pos, classes });
       }
     }
-  }, [textLabels]);
+  }, [textLabels, sheetId]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
