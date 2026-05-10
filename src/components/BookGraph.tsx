@@ -270,6 +270,8 @@ export function BookGraph({
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [bulkCategory, setBulkCategory] = useState('');
   const [isDrawMode, setIsDrawMode] = useState(false);
+  const [isEraserMode, setIsEraserMode] = useState(false);
+  const isEraserModeRef = useRef(false);
   const [drawColor, setDrawColor] = useState('#F87171');
   const [drawWidth, setDrawWidth] = useState(3);
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -380,6 +382,7 @@ export function BookGraph({
   // ── Drawing ───────────────────────────────────────────────────────────────────
   useEffect(() => { drawColorRef.current = drawColor; }, [drawColor]);
   useEffect(() => { drawWidthRef.current = drawWidth; }, [drawWidth]);
+  useEffect(() => { isEraserModeRef.current = isEraserMode; }, [isEraserMode]);
   useEffect(() => {
     drawStrokesRef.current = drawStrokes;
     scheduleDrawRedraw();
@@ -412,11 +415,20 @@ export function BookGraph({
         ctx!.stroke();
       }
 
-      for (const s of drawStrokesRef.current) renderStroke(s.points, s.color, s.width);
-      if (currentStrokeRef.current) {
-        const s = currentStrokeRef.current;
-        renderStroke(s.points, s.color, s.width);
+      function renderAnyStroke(s: DrawStroke) {
+        ctx!.save();
+        if (s.eraser) {
+          ctx!.globalCompositeOperation = 'destination-out';
+          renderStroke(s.points, 'rgba(0,0,0,1)', s.width * 6);
+        } else {
+          ctx!.globalCompositeOperation = 'source-over';
+          renderStroke(s.points, s.color, s.width);
+        }
+        ctx!.restore();
       }
+
+      for (const s of drawStrokesRef.current) renderAnyStroke(s);
+      if (currentStrokeRef.current) renderAnyStroke(currentStrokeRef.current);
     });
   }, []);
 
@@ -429,7 +441,7 @@ export function BookGraph({
     const sy = touch.clientY - rect.top;
     const mx = (sx - panRef.current.x) / zoomRef.current;
     const my = (sy - panRef.current.y) / zoomRef.current;
-    currentStrokeRef.current = { id: `stroke_${Date.now()}`, points: [{ x: mx, y: my }], color: drawColorRef.current, width: drawWidthRef.current };
+    currentStrokeRef.current = { id: `stroke_${Date.now()}`, points: [{ x: mx, y: my }], color: drawColorRef.current, width: drawWidthRef.current, eraser: isEraserModeRef.current };
     isDrawingRef.current = true;
     scheduleDrawRedraw();
   }, [scheduleDrawRedraw]);
@@ -1119,18 +1131,18 @@ export function BookGraph({
       <div className="annotation-btns">
         <button className={`annotation-btn${addingKind === 'text' ? ' active' : ''}`} onClick={() => { setAddingKind((k) => k === 'text' ? null : 'text'); setAddLabelText(''); }} title="テキストをキャンバスに追加">📝 テキスト</button>
         <button className={`annotation-btn${addingKind === 'frame' ? ' active' : ''}`} onClick={() => { setAddingKind((k) => k === 'frame' ? null : 'frame'); setAddLabelText(''); }} title="四角い枠をキャンバスに追加">⬜ 枠</button>
-        <button className={`annotation-btn${isDrawMode ? ' active' : ''}`} onClick={() => setIsDrawMode((p) => !p)} title="自由描画">✏️ 描画</button>
+        <button className={`annotation-btn${isDrawMode ? ' active' : ''}`} onClick={() => { setIsDrawMode((p) => !p); setIsEraserMode(false); }} title="自由描画">✏️ 描画</button>
       </div>
 
       {/* Draw toolbar */}
       {isDrawMode && (
         <div className="draw-toolbar">
-          <div className="draw-toolbar-colors">
+          <div className="draw-toolbar-colors" style={{ opacity: isEraserMode ? 0.35 : 1, pointerEvents: isEraserMode ? 'none' : 'auto' }}>
             {(['#F87171','#FCD34D','#34D399','#60A5FA','#C084FC','#F1F5F9'] as const).map((c) => (
               <button key={c} className={`draw-color-swatch${drawColor === c ? ' active' : ''}`} style={{ background: c }} onClick={() => setDrawColor(c)} />
             ))}
           </div>
-          <div className="draw-toolbar-widths">
+          <div className="draw-toolbar-widths" style={{ opacity: isEraserMode ? 0.35 : 1, pointerEvents: isEraserMode ? 'none' : 'auto' }}>
             {([2, 4, 8] as const).map((w) => (
               <button key={w} className={`draw-width-btn${drawWidth === w ? ' active' : ''}`} onClick={() => setDrawWidth(w)}>
                 <span className="draw-width-dot" style={{ width: w * 3, height: w * 3 }} />
@@ -1138,6 +1150,11 @@ export function BookGraph({
             ))}
           </div>
           <div className="draw-toolbar-actions">
+            <button
+              className={`draw-action-btn${isEraserMode ? ' active' : ''}`}
+              onClick={() => setIsEraserMode((p) => !p)}
+              title="消しゴム"
+            >🧹</button>
             <button className="draw-action-btn" onClick={onUndoDrawStroke} title="1つ戻す">↩</button>
             <button className="draw-action-btn" onClick={() => { if (window.confirm('描画をすべて消しますか？')) onClearDrawStrokes(); }} title="全消去">🗑</button>
           </div>

@@ -49,6 +49,7 @@ export interface DrawStroke {
   points: Array<{ x: number; y: number }>;
   color: string;
   width: number;
+  eraser?: boolean;
 }
 
 export interface TextLabel {
