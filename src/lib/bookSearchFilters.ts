@@ -4,7 +4,7 @@ export interface BookSearchFilters {
   title: string;
   author: string;
   publisher: string;
-  category: string;
+  category: string[];
   rating: string;
   subject: string;
 }
@@ -27,7 +27,7 @@ export function matchesBookFilters(book: Book, filters: BookSearchFilters): bool
   if (!includesNeedle(book.title, filters.title)) return false;
   if (!includesNeedle(book.authors.join(' '), filters.author)) return false;
   if (!includesNeedle(book.publisher, filters.publisher)) return false;
-  if (filters.category !== '' && (book.category ?? '') !== filters.category) return false;
+  if (filters.category.length > 0 && !filters.category.includes(book.category ?? '')) return false;
   if (filters.subject !== '' && !book.subjects.some((s) => s === filters.subject)) return false;
   if (filters.rating !== '') {
     if (filters.rating === '0') {

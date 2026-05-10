@@ -60,10 +60,11 @@ interface BookListProps {
   onSelect: (id: string) => void;
   categories: string[];
   filters: BookSearchFilters;
-  onFilterChange: (key: keyof BookSearchFilters, value: string) => void;
+  onFilterChange: (key: Exclude<keyof BookSearchFilters, 'category'>, value: string) => void;
+  onToggleCategory: (cat: string) => void;
 }
 
-function BookList({ books, filteredBooks, selectedId, onSelect, categories, filters, onFilterChange }: BookListProps) {
+function BookList({ books, filteredBooks, selectedId, onSelect, categories, filters, onFilterChange, onToggleCategory }: BookListProps) {
   if (books.length === 0) return null;
 
   const usedCategories = categories.filter((c) => books.some((b) => b.category === c));
@@ -106,16 +107,15 @@ function BookList({ books, filteredBooks, selectedId, onSelect, categories, filt
           </select>
         )}
         {usedCategories.length > 0 && (
-          <select
-            className="book-list-filter-select"
-            value={filters.category}
-            onChange={(e) => onFilterChange('category', e.target.value)}
-          >
-            <option value="">すべてのカテゴリ</option>
+          <div className="cat-filter-chips">
             {usedCategories.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
+              <button
+                key={cat}
+                className={`cat-filter-chip${filters.category.includes(cat) ? ' active' : ''}`}
+                onClick={() => onToggleCategory(cat)}
+              >{cat}</button>
             ))}
-          </select>
+          </div>
         )}
         {(usedRatings.length > 0 || hasUnrated) && (
           <select
@@ -167,7 +167,7 @@ export default function App() {
   const [addingRecId, setAddingRecId] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
   const [listFilters, setListFilters] = useState<BookSearchFilters>({
-    title: '', author: '', publisher: '', category: '', rating: '', subject: '',
+    title: '', author: '', publisher: '', category: [], rating: '', subject: '',
   });
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [layoutKey, setLayoutKey] = useState(0);
@@ -558,8 +558,17 @@ export default function App() {
     [graph.books, listFilters]
   );
 
-  function updateListFilter(key: keyof BookSearchFilters, value: string) {
+  function updateListFilter(key: Exclude<keyof BookSearchFilters, 'category'>, value: string) {
     setListFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function toggleCategoryFilter(cat: string) {
+    setListFilters((prev) => ({
+      ...prev,
+      category: prev.category.includes(cat)
+        ? prev.category.filter((c) => c !== cat)
+        : [...prev.category, cat],
+    }));
   }
   const existingIds = new Set(graph.books.map((book) => book.id));
 
@@ -708,6 +717,7 @@ export default function App() {
                 categories={graph.categories ?? []}
                 filters={listFilters}
                 onFilterChange={updateListFilter}
+                onToggleCategory={toggleCategoryFilter}
               />
             </>
           )}

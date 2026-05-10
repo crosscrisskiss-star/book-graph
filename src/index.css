@@ -934,6 +934,25 @@ body {
   outline: none;
 }
 .book-list-filter-select:focus { border-color: #3B82F6; }
+.cat-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 2px 0;
+}
+.cat-filter-chip {
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  background: #1E293B;
+  color: #94A3B8;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.cat-filter-chip:hover { border-color: #64748B; color: #CBD5E1; }
+.cat-filter-chip.active { background: #1D4ED8; border-color: #3B82F6; color: #EFF6FF; }
 .book-memo-input {
   min-height: 90px;
   resize: vertical;
