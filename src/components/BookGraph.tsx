@@ -217,6 +217,11 @@ export function BookGraph({
   const positionsLoadedRef = useRef(false);
   const [zoom, setZoom] = useState(1);
   const [isSelectMode, setIsSelectMode] = useState(false);
+  const isSelectModeRef = useRef(false);
+
+  useEffect(() => {
+    isSelectModeRef.current = isSelectMode;
+  }, [isSelectMode]);
 
   useEffect(() => {
     booksRef.current = data.books;
@@ -259,7 +264,11 @@ export function BookGraph({
       if (cy) {
         cy.userPanningEnabled(!next);
         cy.boxSelectionEnabled(next);
-        if (!next) cy.elements().unselect();
+        if (next) {
+          cy.minZoom(0.05);
+        } else {
+          cy.elements().unselect();
+        }
       }
       return next;
     });
@@ -268,8 +277,24 @@ export function BookGraph({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const container = containerRef.current;
+    const handleWheel = (e: WheelEvent) => {
+      if (!isSelectModeRef.current) return;
+      const cyInst = cyRef.current;
+      if (!cyInst) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const factor = e.deltaY < 0 ? 1.1 : 0.9;
+      const rect = container.getBoundingClientRect();
+      cyInst.zoom({
+        level: Math.max(0.05, Math.min(10, cyInst.zoom() * factor)),
+        renderedPosition: { x: e.clientX - rect.left, y: e.clientY - rect.top },
+      });
+    };
+    container.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+
     const cy = cytoscape({
-      container: containerRef.current,
+      container,
       style: [
         {
           selector: 'node.book-node',
@@ -357,6 +382,7 @@ export function BookGraph({
 
     cyRef.current = cy;
     return () => {
+      container.removeEventListener('wheel', handleWheel, { capture: true });
       if (saveTimer) clearTimeout(saveTimer);
       cy.destroy();
       cyRef.current = null;
