@@ -624,6 +624,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
+      <div className="header-row">
         <span className="header-title">Book Graph</span>
         <button className="btn-primary" onClick={() => setShowSearch((value) => !value)}>
           {showSearch ? TEXT.close : TEXT.addBook}
@@ -677,6 +678,35 @@ export default function App() {
             {graph.books.length}{TEXT.books} / {graph.relationships.length}{TEXT.relationships}
           </span>
         )}
+      </div>
+        <div className="sheet-tab-bar">
+          {sheets.map((sheet) => (
+            <button
+              key={sheet.id}
+              className={`sheet-tab${currentSheetId === sheet.id ? ' active' : ''}`}
+              onClick={() => switchSheet(sheet.id)}
+              onDoubleClick={() => {
+                const name = window.prompt('シート名を変更', sheet.name);
+                if (name?.trim() && name.trim() !== sheet.name) renameSheet(sheet.id, name.trim());
+              }}
+            >
+              {sheet.name}
+              {sheets.length > 1 && (
+                <span
+                  className="sheet-tab-close"
+                  onClick={(e) => { e.stopPropagation(); deleteSheet(sheet.id); }}
+                >×</span>
+              )}
+            </button>
+          ))}
+          <button
+            className="sheet-add-btn"
+            onClick={() => {
+              const name = window.prompt('新しいシート名を入力してください', '新しいシート');
+              if (name?.trim()) addSheet(name.trim());
+            }}
+          >＋</button>
+        </div>
       </header>
 
       {showSearch && (
@@ -752,35 +782,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      <div className="sheet-tab-bar">
-        {sheets.map((sheet) => (
-          <button
-            key={sheet.id}
-            className={`sheet-tab${currentSheetId === sheet.id ? ' active' : ''}`}
-            onClick={() => switchSheet(sheet.id)}
-            onDoubleClick={() => {
-              const name = window.prompt('シート名を変更', sheet.name);
-              if (name?.trim() && name.trim() !== sheet.name) renameSheet(sheet.id, name.trim());
-            }}
-          >
-            {sheet.name}
-            {sheets.length > 1 && (
-              <span
-                className="sheet-tab-close"
-                onClick={(e) => { e.stopPropagation(); deleteSheet(sheet.id); }}
-              >×</span>
-            )}
-          </button>
-        ))}
-        <button
-          className="sheet-add-btn"
-          onClick={() => {
-            const name = window.prompt('新しいシート名を入力してください', '新しいシート');
-            if (name?.trim()) addSheet(name.trim());
-          }}
-        >＋</button>
-      </div>
 
       <div className="main">
         <aside className={`left-panel${showLeftPanel ? '' : ' collapsed'}`}>
