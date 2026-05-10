@@ -417,6 +417,7 @@ export default function App() {
     updateGraph((prev) => ({
       ...prev,
       drawStrokes: [...(prev.drawStrokes ?? []), stroke],
+      drawVersion: 2,
     }));
   }
 
@@ -424,15 +425,16 @@ export default function App() {
     updateGraph((prev) => ({
       ...prev,
       drawStrokes: (prev.drawStrokes ?? []).slice(0, -1),
+      drawVersion: 2,
     }));
   }
 
   function clearDrawStrokes() {
-    updateGraph((prev) => ({ ...prev, drawStrokes: [] }));
+    updateGraph((prev) => ({ ...prev, drawStrokes: [], drawVersion: 2 }));
   }
 
   function setDrawStrokes(strokes: DrawStroke[]) {
-    updateGraph((prev) => ({ ...prev, drawStrokes: strokes }));
+    updateGraph((prev) => ({ ...prev, drawStrokes: strokes, drawVersion: 2 }));
   }
 
   function addCategory(cat: string) {
@@ -635,7 +637,14 @@ export default function App() {
 
       {showSearch && (
         <div className="search-overlay">
-          <BookSearch onAdd={(book) => { addBook(book); setShowSearch(false); }} existingIds={existingIds} />
+          <BookSearch onAdd={(book) => {
+            addBook(book);
+            setShowSearch(false);
+            setListFilters({ title: '', author: '', publisher: '', category: [], rating: '', subject: '' });
+            setSelectedId(book.id);
+            setSidebarBookId(book.id);
+            setFocusRequest(`${book.id}::${Date.now()}`);
+          }} existingIds={existingIds} />
         </div>
       )}
 
