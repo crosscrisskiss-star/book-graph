@@ -3,6 +3,7 @@ import cytoscape from 'cytoscape';
 import type { Book, GraphData, RelationshipType } from '../types';
 import { REL_COLORS } from '../types';
 import { loadPositions, savePositions, type PositionMap } from '../lib/positions';
+import { loadFavorites, saveFavorite, deleteFavorite, type FavoriteLayout } from '../lib/favorites';
 
 interface Props {
   data: GraphData;
@@ -218,6 +219,9 @@ export function BookGraph({
   const [zoom, setZoom] = useState(1);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const isSelectModeRef = useRef(false);
+  const [favorites, setFavorites] = useState<FavoriteLayout[]>(() => loadFavorites());
+  const [showFavPanel, setShowFavPanel] = useState(false);
+  const [newFavName, setNewFavName] = useState('');
 
   useEffect(() => {
     isSelectModeRef.current = isSelectMode;
@@ -272,6 +276,38 @@ export function BookGraph({
       }
       return next;
     });
+  }, []);
+
+  const handleSaveFavorite = useCallback(() => {
+    const cy = cyRef.current;
+    if (!cy || !newFavName.trim()) return;
+    const positions: PositionMap = {};
+    cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+      positions[node.id()] = { ...node.position() };
+    });
+    saveFavorite(newFavName.trim(), positions);
+    setFavorites(loadFavorites());
+    setNewFavName('');
+  }, [newFavName]);
+
+  const handleRestoreFavorite = useCallback((fav: FavoriteLayout) => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.batch(() => {
+      for (const [id, pos] of Object.entries(fav.positions)) {
+        const node = cy.getElementById(id);
+        if (node.length) node.position({ ...pos });
+      }
+    });
+    fitVisible(cy);
+    setZoom(cy.zoom());
+    saveCurrentPositions(cy);
+    setShowFavPanel(false);
+  }, []);
+
+  const handleDeleteFavorite = useCallback((id: string) => {
+    deleteFavorite(id);
+    setFavorites(loadFavorites());
   }, []);
 
   useEffect(() => {
@@ -565,6 +601,7 @@ export function BookGraph({
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%', cursor: isSelectMode ? 'crosshair' : 'default' }} />
+
       <button
         className={`select-mode-btn${isSelectMode ? ' active' : ''}`}
         onClick={toggleSelectMode}
@@ -572,6 +609,51 @@ export function BookGraph({
       >
         {isSelectMode ? '✕ 選択中' : '⬚ 囲む'}
       </button>
+
+      {/* Favorites panel */}
+      <div className="fav-panel">
+        <button
+          className={`fav-toggle-btn${showFavPanel ? ' active' : ''}`}
+          onClick={() => setShowFavPanel((p) => !p)}
+        >
+          ★ お気に入り{favorites.length > 0 ? `（${favorites.length}）` : ''}
+        </button>
+        {showFavPanel && (
+          <div className="fav-dropdown">
+            <div className="fav-save-row">
+              <input
+                className="fav-name-input"
+                value={newFavName}
+                onChange={(e) => setNewFavName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveFavorite()}
+                placeholder="配置名を入力..."
+              />
+              <button
+                className="fav-save-btn"
+                onClick={handleSaveFavorite}
+                disabled={!newFavName.trim()}
+              >
+                保存
+              </button>
+            </div>
+            {favorites.length > 0 && (
+              <ul className="fav-list">
+                {favorites.map((fav) => (
+                  <li key={fav.id} className="fav-item">
+                    <span className="fav-item-name">{fav.name}</span>
+                    <button className="fav-restore-btn" onClick={() => handleRestoreFavorite(fav)}>復元</button>
+                    <button className="fav-delete-btn" onClick={() => handleDeleteFavorite(fav.id)}>✕</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {favorites.length === 0 && (
+              <p className="fav-empty">まだ保存した配置はありません</p>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="zoom-overlay">
         <span className="zoom-pct">{Math.round(zoom * 100)}%</span>
         <button className="zoom-reset-btn" onClick={handleResetZoom} title="100%に戻す">↺</button>
