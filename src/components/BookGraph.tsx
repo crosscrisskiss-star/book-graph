@@ -973,27 +973,64 @@ export function BookGraph({
       const saved = loadPositions();
       if (!positionsLoadedRef.current) {
         positionsLoadedRef.current = true;
-        const allSaved = data.books.length > 0 && data.books.every((b) => saved[b.id]);
-        if (allSaved) {
+        const anySaved = data.books.length > 0 && data.books.some((b) => saved[b.id]);
+        if (anySaved) {
           window.requestAnimationFrame(() => {
             window.requestAnimationFrame(() => {
               const c = cyRef.current;
               if (!c || cancelled) return;
               restoreSavedPositions(c, data.books, saved);
+              // Place books without saved positions below existing layout
+              const unsaved = data.books.filter((b) => !saved[b.id]);
+              if (unsaved.length > 0) {
+                const existing = c.nodes(BOOK_NODE_SELECTOR).filter((n) => Boolean(saved[n.id()]));
+                const bb = existing.length > 0 ? existing.boundingBox() : null;
+                const baseX = bb ? (bb.x1 + bb.x2) / 2 : (c.width() / 2 - c.pan().x) / c.zoom();
+                const baseY = bb ? bb.y2 + 200 : (c.height() / 2 - c.pan().y) / c.zoom();
+                const cols = Math.max(1, Math.ceil(Math.sqrt(unsaved.length)));
+                c.batch(() => {
+                  unsaved.forEach((book, i) => {
+                    const node = c.getElementById(book.id);
+                    if (node.length) node.position({
+                      x: baseX + (i % cols - (cols - 1) / 2) * 140,
+                      y: baseY + Math.floor(i / cols) * 180,
+                    });
+                  });
+                });
+              }
               fitVisible(c);
               setZoom(c.zoom());
+              saveCurrentPositions(c);
             });
           });
         } else {
           scheduleLayout();
         }
       } else if (added.some((node) => !saved[String(node.data.id)])) {
-        scheduleLayout();
+        // New books added after initial load: place below existing, don't re-layout all
+        const unsaved = added.filter((node) => !saved[String(node.data.id)]);
+        const existing = cy.nodes(BOOK_NODE_SELECTOR).filter((n) => Boolean(saved[n.id()]));
+        const bb = existing.length > 0 ? existing.boundingBox() : null;
+        const pan = cy.pan(); const z = cy.zoom();
+        const baseX = bb ? (bb.x1 + bb.x2) / 2 : (cy.width() / 2 - pan.x) / z;
+        const baseY = bb ? bb.y2 + 200 : (cy.height() / 2 - pan.y) / z;
+        const cols = Math.max(1, Math.ceil(Math.sqrt(unsaved.length)));
+        cy.batch(() => {
+          unsaved.forEach((nodeDef, i) => {
+            const node = cy.getElementById(String(nodeDef.data.id));
+            if (node.length) node.position({
+              x: baseX + (i % cols - (cols - 1) / 2) * 140,
+              y: baseY + Math.floor(i / cols) * 180,
+            });
+          });
+        });
+        if (added.length > 0) restoreSavedPositions(cy, data.books, saved);
+        fitVisible(cy);
+        setZoom(cy.zoom());
+        saveCurrentPositions(cy);
       } else {
         if (added.length > 0) restoreSavedPositions(cy, data.books, saved);
-        if (added.length > 0) {
-          fitVisible(cy);
-        }
+        if (added.length > 0) fitVisible(cy);
         if (removed || added.length > 0) setZoom(cy.zoom());
       }
     }
