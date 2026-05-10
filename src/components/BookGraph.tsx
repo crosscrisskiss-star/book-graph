@@ -222,9 +222,17 @@ export function BookGraph({
   const [favorites, setFavorites] = useState<FavoriteLayout[]>(() => loadFavorites());
   const [showFavPanel, setShowFavPanel] = useState(false);
   const [newFavName, setNewFavName] = useState('');
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const dragBoxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [dragBox, setDragBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   useEffect(() => {
     isSelectModeRef.current = isSelectMode;
+    if (!isSelectMode) {
+      dragStartRef.current = null;
+      dragBoxRef.current = null;
+      setDragBox(null);
+    }
   }, [isSelectMode]);
 
   useEffect(() => {
@@ -329,6 +337,75 @@ export function BookGraph({
     };
     container.addEventListener('wheel', handleWheel, { passive: false, capture: true });
 
+    // Touch-based box selection (iPad / touch devices)
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!isSelectModeRef.current || e.touches.length !== 1) return;
+      const cyInst = cyRef.current;
+      if (!cyInst) return;
+      const touch = e.touches[0];
+      const rect = container.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      // If touching a node, let Cytoscape handle it (node drag)
+      const onNode = cyInst.nodes(BOOK_NODE_SELECTOR).some((node) => {
+        const bb = node.renderedBoundingBox();
+        return x >= bb.x1 && x <= bb.x2 && y >= bb.y1 && y <= bb.y2;
+      });
+      if (onNode) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      dragStartRef.current = { x, y };
+      dragBoxRef.current = { x, y, w: 0, h: 0 };
+      setDragBox({ x, y, w: 0, h: 0 });
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!dragStartRef.current || e.touches.length !== 1) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const touch = e.touches[0];
+      const rect = container.getBoundingClientRect();
+      const currX = touch.clientX - rect.left;
+      const currY = touch.clientY - rect.top;
+      const start = dragStartRef.current;
+      const box = {
+        x: Math.min(start.x, currX),
+        y: Math.min(start.y, currY),
+        w: Math.abs(currX - start.x),
+        h: Math.abs(currY - start.y),
+      };
+      dragBoxRef.current = box;
+      setDragBox({ ...box });
+    };
+
+    const handleTouchEnd = () => {
+      if (!dragStartRef.current) return;
+      dragStartRef.current = null;
+      const box = dragBoxRef.current;
+      dragBoxRef.current = null;
+      setDragBox(null);
+      const cyInst = cyRef.current;
+      if (!cyInst) return;
+      if (!box || (box.w < 10 && box.h < 10)) {
+        cyInst.elements().unselect();
+        return;
+      }
+      cyInst.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+        const bb = node.renderedBoundingBox();
+        const cx = (bb.x1 + bb.x2) / 2;
+        const cy2 = (bb.y1 + bb.y2) / 2;
+        if (cx >= box.x && cx <= box.x + box.w && cy2 >= box.y && cy2 <= box.y + box.h) {
+          node.select();
+        } else {
+          node.unselect();
+        }
+      });
+    };
+
+    container.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+    container.addEventListener('touchend', handleTouchEnd, { capture: true });
+
     const cy = cytoscape({
       container,
       style: [
@@ -419,6 +496,9 @@ export function BookGraph({
     cyRef.current = cy;
     return () => {
       container.removeEventListener('wheel', handleWheel, { capture: true });
+      container.removeEventListener('touchstart', handleTouchStart, { capture: true });
+      container.removeEventListener('touchmove', handleTouchMove, { capture: true });
+      container.removeEventListener('touchend', handleTouchEnd, { capture: true });
       if (saveTimer) clearTimeout(saveTimer);
       cy.destroy();
       cyRef.current = null;
@@ -516,10 +596,10 @@ export function BookGraph({
         scheduleLayout();
       } else {
         if (added.length > 0) restoreSavedPositions(cy, data.books, saved);
-        if (removed || added.length > 0) {
+        if (added.length > 0) {
           fitVisible(cy);
-          setZoom(cy.zoom());
         }
+        if (removed || added.length > 0) setZoom(cy.zoom());
       }
     }
 
@@ -601,6 +681,20 @@ export function BookGraph({
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%', cursor: isSelectMode ? 'crosshair' : 'default' }} />
+      {dragBox && dragBox.w > 4 && (
+        <div style={{
+          position: 'absolute',
+          left: dragBox.x,
+          top: dragBox.y,
+          width: dragBox.w,
+          height: dragBox.h,
+          border: '1.5px solid #3B82F6',
+          background: 'rgba(59,130,246,0.10)',
+          borderRadius: 2,
+          pointerEvents: 'none',
+          zIndex: 4,
+        }} />
+      )}
 
       <button
         className={`select-mode-btn${isSelectMode ? ' active' : ''}`}
