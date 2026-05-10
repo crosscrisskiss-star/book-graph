@@ -352,7 +352,7 @@ export function BookGraph({
     const cy = cyRef.current;
     if (!cy || !newFavName.trim()) return;
     const positions: PositionMap = {};
-    cy.nodes(BOOK_NODE_SELECTOR).forEach((node) => {
+    cy.nodes(`${BOOK_NODE_SELECTOR}, ${ANNOTATION_SELECTOR}`).forEach((node) => {
       positions[node.id()] = { ...node.position() };
     });
     saveFavorite(newFavName.trim(), positions);
