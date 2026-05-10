@@ -40,7 +40,6 @@ const EXPAND_TYPES: Array<{ type: RelationshipType; label: string }> = [
   { type: 'author', label: '\u540c\u8457\u8005\u306e\u672c\u3092\u5c55\u958b' },
   { type: 'genre', label: '\u30b8\u30e3\u30f3\u30eb\u95a2\u9023\u3092\u5c55\u958b' },
   { type: 'recommendation', label: '\u304a\u3059\u3059\u3081\u3092\u5c55\u958b' },
-  { type: 'category', label: '\u30ab\u30c6\u30b4\u30ea\u95a2\u9023\u3092\u5c55\u958b' },
 ];
 
 interface Props {
@@ -116,7 +115,7 @@ export function BookSidebar({
   const subjects = safeList(book.subjects);
   const series = safeList(book.series);
   const myRels = relationships.filter(
-    (rel) => rel.source === book.id || rel.target === book.id
+    (rel) => (rel.source === book.id || rel.target === book.id) && rel.type !== 'category'
   );
 
   async function expand(type: RelationshipType) {
@@ -479,7 +478,7 @@ export function BookSidebar({
           value={manualType}
           onChange={(e) => setManualType(e.target.value as RelationshipType)}
         >
-          {(Object.keys(REL_LABELS) as RelationshipType[]).map((type) => (
+          {(Object.keys(REL_LABELS) as RelationshipType[]).filter((t) => t !== 'category').map((type) => (
             <option key={type} value={type}>{REL_LABELS[type]}</option>
           ))}
         </select>
