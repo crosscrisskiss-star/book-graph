@@ -7,7 +7,6 @@ const ALL_TYPES: RelationshipType[] = [
   'genre',
   'recommendation',
   'reference',
-  'category',
   'manual',
 ];
 
