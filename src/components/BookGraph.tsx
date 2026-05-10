@@ -4,7 +4,7 @@ import type { Book, GraphData, RelationshipType } from '../types';
 import { REL_COLORS } from '../types';
 import { loadPositions, savePositions, type PositionMap } from '../lib/positions';
 import { loadFavorites, saveFavorite, deleteFavorite, type FavoriteLayout } from '../lib/favorites';
-import type { TextLabel } from '../types';
+import type { DrawStroke, TextLabel } from '../types';
 
 interface Props {
   data: GraphData;
@@ -18,6 +18,12 @@ interface Props {
   onAddTextLabel: (id: string, text: string, kind: 'text' | 'frame') => void;
   onUpdateTextLabel: (id: string, text: string) => void;
   onDeleteTextLabel: (id: string) => void;
+  drawStrokes: DrawStroke[];
+  onAddDrawStroke: (stroke: DrawStroke) => void;
+  onUndoDrawStroke: () => void;
+  onClearDrawStrokes: () => void;
+  categories: string[];
+  onBulkUpdateBooks: (ids: string[], patch: Partial<import('../types').Book>) => void;
 }
 
 type EditingLabel = { id: string; text: string; x: number; y: number; kind: 'text' | 'frame' };
@@ -232,6 +238,12 @@ export function BookGraph({
   onAddTextLabel,
   onUpdateTextLabel,
   onDeleteTextLabel,
+  drawStrokes,
+  onAddDrawStroke,
+  onUndoDrawStroke,
+  onClearDrawStrokes,
+  categories,
+  onBulkUpdateBooks,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
@@ -255,6 +267,20 @@ export function BookGraph({
   const [editingLabel, setEditingLabel] = useState<EditingLabel | null>(null);
   const [addingKind, setAddingKind] = useState<AddingKind>(null);
   const [addLabelText, setAddLabelText] = useState('');
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [isDrawMode, setIsDrawMode] = useState(false);
+  const [drawColor, setDrawColor] = useState('#F87171');
+  const [drawWidth, setDrawWidth] = useState(3);
+  const drawCanvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
+  const currentStrokeRef = useRef<DrawStroke | null>(null);
+  const panRef = useRef({ x: 0, y: 0 });
+  const zoomRef = useRef(1);
+  const drawColorRef = useRef('#F87171');
+  const drawWidthRef = useRef(3);
+  const drawStrokesRef = useRef<DrawStroke[]>([]);
+  const drawRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     isSelectModeRef.current = isSelectMode;
@@ -350,6 +376,86 @@ export function BookGraph({
     deleteFavorite(id);
     setFavorites(loadFavorites());
   }, []);
+
+  // ── Drawing ───────────────────────────────────────────────────────────────────
+  useEffect(() => { drawColorRef.current = drawColor; }, [drawColor]);
+  useEffect(() => { drawWidthRef.current = drawWidth; }, [drawWidth]);
+  useEffect(() => {
+    drawStrokesRef.current = drawStrokes;
+    scheduleDrawRedraw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawStrokes]);
+
+  const scheduleDrawRedraw = useCallback(() => {
+    if (drawRafRef.current) cancelAnimationFrame(drawRafRef.current);
+    drawRafRef.current = requestAnimationFrame(() => {
+      drawRafRef.current = null;
+      const canvas = drawCanvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const pan = panRef.current;
+      const zoom = zoomRef.current;
+
+      function renderStroke(points: Array<{ x: number; y: number }>, color: string, width: number) {
+        if (points.length < 2) return;
+        ctx!.beginPath();
+        ctx!.strokeStyle = color;
+        ctx!.lineWidth = width;
+        ctx!.lineCap = 'round';
+        ctx!.lineJoin = 'round';
+        ctx!.moveTo(points[0].x * zoom + pan.x, points[0].y * zoom + pan.y);
+        for (let i = 1; i < points.length; i++) {
+          ctx!.lineTo(points[i].x * zoom + pan.x, points[i].y * zoom + pan.y);
+        }
+        ctx!.stroke();
+      }
+
+      for (const s of drawStrokesRef.current) renderStroke(s.points, s.color, s.width);
+      if (currentStrokeRef.current) {
+        const s = currentStrokeRef.current;
+        renderStroke(s.points, s.color, s.width);
+      }
+    });
+  }, []);
+
+  const handleDrawTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length !== 1) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const sx = touch.clientX - rect.left;
+    const sy = touch.clientY - rect.top;
+    const mx = (sx - panRef.current.x) / zoomRef.current;
+    const my = (sy - panRef.current.y) / zoomRef.current;
+    currentStrokeRef.current = { id: `stroke_${Date.now()}`, points: [{ x: mx, y: my }], color: drawColorRef.current, width: drawWidthRef.current };
+    isDrawingRef.current = true;
+    scheduleDrawRedraw();
+  }, [scheduleDrawRedraw]);
+
+  const handleDrawTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDrawingRef.current || e.touches.length !== 1) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const sx = touch.clientX - rect.left;
+    const sy = touch.clientY - rect.top;
+    const mx = (sx - panRef.current.x) / zoomRef.current;
+    const my = (sy - panRef.current.y) / zoomRef.current;
+    currentStrokeRef.current!.points.push({ x: mx, y: my });
+    scheduleDrawRedraw();
+  }, [scheduleDrawRedraw]);
+
+  const handleDrawTouchEnd = useCallback(() => {
+    if (!isDrawingRef.current || !currentStrokeRef.current) return;
+    isDrawingRef.current = false;
+    const stroke = currentStrokeRef.current;
+    currentStrokeRef.current = null;
+    scheduleDrawRedraw();
+    if (stroke.points.length >= 2) onAddDrawStroke(stroke);
+  }, [onAddDrawStroke, scheduleDrawRedraw]);
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // ── Text label / frame handlers ──────────────────────────────────────────────
   const handleConfirmAddLabel = useCallback(() => {
@@ -698,7 +804,15 @@ export function BookGraph({
       saveTimer = setTimeout(() => saveCurrentPositions(cy), 80);
     };
 
-    cy.on('zoom', () => setZoom(cy.zoom()));
+    // Size the draw canvas to match the container
+    const drawCanvas = drawCanvasRef.current;
+    if (drawCanvas) {
+      drawCanvas.width = container.offsetWidth;
+      drawCanvas.height = container.offsetHeight;
+    }
+
+    cy.on('zoom', () => { const z = cy.zoom(); zoomRef.current = z; setZoom(z); scheduleDrawRedraw(); });
+    cy.on('pan', () => { panRef.current = cy.pan(); scheduleDrawRedraw(); });
     cy.on('tap', `node${BOOK_NODE_SELECTOR}`, (event) => onSelectBookRef.current(event.target.id()));
     cy.on('tap', `node${ANNOTATION_SELECTOR}`, (event) => {
       if (isSelectModeRef.current) return;
@@ -713,6 +827,12 @@ export function BookGraph({
       });
     });
     cy.on('dragfree', `node${BOOK_NODE_SELECTOR}, node${ANNOTATION_SELECTOR}`, debouncedSave);
+
+    const updateSelection = () => {
+      const ids = cy.nodes(`${BOOK_NODE_SELECTOR}:selected`).map((n) => n.id());
+      setSelectedNodeIds(ids);
+    };
+    cy.on('select unselect', BOOK_NODE_SELECTOR, updateSelection);
 
     cyRef.current = cy;
     return () => {
@@ -919,10 +1039,24 @@ export function BookGraph({
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div ref={containerRef} style={{ width: '100%', height: '100%', cursor: isSelectMode ? 'crosshair' : 'default' }} />
+      <div ref={containerRef} style={{ width: '100%', height: '100%', cursor: isDrawMode ? 'crosshair' : isSelectMode ? 'crosshair' : 'default' }} />
+
+      {/* Drawing canvas */}
+      <canvas ref={drawCanvasRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2 }} />
+
+      {/* Draw mode touch overlay */}
+      {isDrawMode && (
+        <div
+          style={{ position: 'absolute', inset: 0, zIndex: 7, touchAction: 'none' }}
+          onTouchStart={handleDrawTouchStart}
+          onTouchMove={handleDrawTouchMove}
+          onTouchEnd={handleDrawTouchEnd}
+          onTouchCancel={handleDrawTouchEnd}
+        />
+      )}
 
       {/* Touch overlay: enabled by CSS only on coarse pointer devices */}
-      {isSelectMode && (
+      {isSelectMode && !isDrawMode && (
         <div
           className="touch-select-overlay"
           onTouchStart={handleOverlayTouchStart}
@@ -955,11 +1089,60 @@ export function BookGraph({
         {isSelectMode ? '✕ 選択中' : '⬚ 囲む'}
       </button>
 
+      {/* Bulk category panel (shown when 2+ nodes selected in select mode) */}
+      {isSelectMode && selectedNodeIds.length >= 2 && (
+        <div className="bulk-panel">
+          <span className="bulk-panel-count">{selectedNodeIds.length}冊選択中</span>
+          <select
+            className="bulk-category-select"
+            value={bulkCategory}
+            onChange={(e) => setBulkCategory(e.target.value)}
+          >
+            <option value="">カテゴリを選択…</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button
+            className="bulk-apply-btn"
+            disabled={!bulkCategory}
+            onClick={() => {
+              onBulkUpdateBooks(selectedNodeIds, { category: bulkCategory });
+              setBulkCategory('');
+              cyRef.current?.nodes(`${BOOK_NODE_SELECTOR}:selected`).unselect();
+            }}
+          >
+            適用
+          </button>
+        </div>
+      )}
+
       {/* Annotation buttons */}
       <div className="annotation-btns">
         <button className={`annotation-btn${addingKind === 'text' ? ' active' : ''}`} onClick={() => { setAddingKind((k) => k === 'text' ? null : 'text'); setAddLabelText(''); }} title="テキストをキャンバスに追加">📝 テキスト</button>
         <button className={`annotation-btn${addingKind === 'frame' ? ' active' : ''}`} onClick={() => { setAddingKind((k) => k === 'frame' ? null : 'frame'); setAddLabelText(''); }} title="四角い枠をキャンバスに追加">⬜ 枠</button>
+        <button className={`annotation-btn${isDrawMode ? ' active' : ''}`} onClick={() => setIsDrawMode((p) => !p)} title="自由描画">✏️ 描画</button>
       </div>
+
+      {/* Draw toolbar */}
+      {isDrawMode && (
+        <div className="draw-toolbar">
+          <div className="draw-toolbar-colors">
+            {(['#F87171','#FCD34D','#34D399','#60A5FA','#C084FC','#F1F5F9'] as const).map((c) => (
+              <button key={c} className={`draw-color-swatch${drawColor === c ? ' active' : ''}`} style={{ background: c }} onClick={() => setDrawColor(c)} />
+            ))}
+          </div>
+          <div className="draw-toolbar-widths">
+            {([2, 4, 8] as const).map((w) => (
+              <button key={w} className={`draw-width-btn${drawWidth === w ? ' active' : ''}`} onClick={() => setDrawWidth(w)}>
+                <span className="draw-width-dot" style={{ width: w * 3, height: w * 3 }} />
+              </button>
+            ))}
+          </div>
+          <div className="draw-toolbar-actions">
+            <button className="draw-action-btn" onClick={onUndoDrawStroke} title="1つ戻す">↩</button>
+            <button className="draw-action-btn" onClick={() => { if (window.confirm('描画をすべて消しますか？')) onClearDrawStrokes(); }} title="全消去">🗑</button>
+          </div>
+        </div>
+      )}
 
       {/* Add annotation panel */}
       {addingKind && (

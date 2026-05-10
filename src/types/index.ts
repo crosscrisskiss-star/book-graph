@@ -44,6 +44,13 @@ export interface FavoriteSyncItem {
   positions: PositionSyncMap;
 }
 
+export interface DrawStroke {
+  id: string;
+  points: Array<{ x: number; y: number }>;
+  color: string;
+  width: number;
+}
+
 export interface TextLabel {
   id: string;
   text: string;
@@ -57,6 +64,7 @@ export interface GraphData {
   positions?: PositionSyncMap;
   favorites?: FavoriteSyncItem[];
   textLabels?: TextLabel[];
+  drawStrokes?: DrawStroke[];
 }
 
 export const REL_COLORS: Record<RelationshipType, string> = {

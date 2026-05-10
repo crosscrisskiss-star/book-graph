@@ -335,6 +335,107 @@ body {
 .empty-icon { font-size: 48px; }
 .empty-text { font-size: 14px; text-align: center; max-width: 280px; }
 
+/* Draw toolbar */
+.draw-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 8px 12px;
+  z-index: 10;
+}
+.draw-toolbar-colors, .draw-toolbar-widths, .draw-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.draw-toolbar-colors { border-right: 1px solid #334155; padding-right: 8px; }
+.draw-toolbar-widths { border-right: 1px solid #334155; padding-right: 8px; }
+.draw-color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s;
+}
+.draw-color-swatch.active { border-color: #F1F5F9; }
+.draw-color-swatch:hover { border-color: #94A3B8; }
+.draw-width-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.draw-width-btn.active { border-color: #3B82F6; background: rgba(59,130,246,0.15); }
+.draw-width-dot {
+  display: block;
+  background: #F1F5F9;
+  border-radius: 50%;
+}
+.draw-action-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #94A3B8;
+  font-size: 14px;
+  cursor: pointer;
+}
+.draw-action-btn:hover { border-color: #475569; color: #F1F5F9; }
+
+/* Bulk category panel */
+.bulk-panel {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #3B82F6;
+  border-radius: 10px;
+  padding: 6px 10px;
+  z-index: 10;
+}
+.bulk-panel-count { font-size: 11px; color: #93C5FD; white-space: nowrap; }
+.bulk-category-select {
+  padding: 4px 8px;
+  background: #0F172A;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #F1F5F9;
+  font-size: 12px;
+}
+.bulk-apply-btn {
+  padding: 4px 12px;
+  background: #3B82F6;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bulk-apply-btn:disabled { opacity: 0.4; cursor: default; }
+
 /* Annotation buttons */
 .annotation-btns {
   position: absolute;

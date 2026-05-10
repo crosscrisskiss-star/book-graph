@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Book, GraphData, Relationship, RelationshipType } from './types';
+import type { Book, DrawStroke, GraphData, Relationship, RelationshipType } from './types';
 import { loadGraph, saveGraph } from './lib/storage';
 import { dedupeRelationships, detectRelationships, detectAllRelationships } from './lib/relationships';
 import { BookGraph } from './components/BookGraph';
@@ -347,6 +347,14 @@ export default function App() {
         existingIds.add(book.id);
         added++;
       }
+      // Sync categories from imported books into the categories list
+      const importedCategories = [...new Set(books.map((b) => b.category).filter((c): c is string => Boolean(c)))];
+      const existingCategories = next.categories ?? [];
+      const newCategories = importedCategories.filter((c) => !existingCategories.includes(c));
+      if (newCategories.length > 0) {
+        next = { ...next, categories: [...existingCategories, ...newCategories] };
+      }
+
       const parts = [];
       if (added > 0) parts.push(`${added}冊追加`);
       if (updated > 0) parts.push(`${updated}冊更新`);
@@ -404,6 +412,24 @@ export default function App() {
       ...prev,
       textLabels: (prev.textLabels ?? []).filter((l) => l.id !== id),
     }));
+  }
+
+  function addDrawStroke(stroke: DrawStroke) {
+    updateGraph((prev) => ({
+      ...prev,
+      drawStrokes: [...(prev.drawStrokes ?? []), stroke],
+    }));
+  }
+
+  function undoDrawStroke() {
+    updateGraph((prev) => ({
+      ...prev,
+      drawStrokes: (prev.drawStrokes ?? []).slice(0, -1),
+    }));
+  }
+
+  function clearDrawStrokes() {
+    updateGraph((prev) => ({ ...prev, drawStrokes: [] }));
   }
 
   function addCategory(cat: string) {
@@ -706,6 +732,17 @@ export default function App() {
               onAddTextLabel={addTextLabel}
               onUpdateTextLabel={updateTextLabel}
               onDeleteTextLabel={removeTextLabel}
+              drawStrokes={graph.drawStrokes ?? []}
+              onAddDrawStroke={addDrawStroke}
+              onUndoDrawStroke={undoDrawStroke}
+              onClearDrawStrokes={clearDrawStrokes}
+              categories={graph.categories ?? []}
+              onBulkUpdateBooks={(ids, patch) => {
+                updateGraph((prev) => ({
+                  ...prev,
+                  books: prev.books.map((b) => ids.includes(b.id) ? { ...b, ...patch } : b),
+                }));
+              }}
             />
           )}
 
