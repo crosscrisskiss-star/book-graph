@@ -56,6 +56,8 @@ export interface TextLabel {
   id: string;
   text: string;
   kind: 'text' | 'frame';
+  w?: number;
+  h?: number;
 }
 
 export interface GraphData {

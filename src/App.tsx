@@ -392,10 +392,10 @@ export default function App() {
     if (sidebarBookId === id) setSidebarBookId(null);
   }
 
-  function addTextLabel(id: string, text: string, kind: 'text' | 'frame') {
+  function addTextLabel(id: string, text: string, kind: 'text' | 'frame', w?: number, h?: number) {
     updateGraph((prev) => ({
       ...prev,
-      textLabels: [...(prev.textLabels ?? []), { id, text, kind }],
+      textLabels: [...(prev.textLabels ?? []), { id, text, kind, w, h }],
     }));
   }
 

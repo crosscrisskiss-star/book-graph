@@ -15,7 +15,7 @@ interface Props {
   focusRequest: string | null;
   groupByAuthor: boolean;
   textLabels: TextLabel[];
-  onAddTextLabel: (id: string, text: string, kind: 'text' | 'frame') => void;
+  onAddTextLabel: (id: string, text: string, kind: 'text' | 'frame', w?: number, h?: number) => void;
   onUpdateTextLabel: (id: string, text: string) => void;
   onDeleteTextLabel: (id: string) => void;
   drawStrokes: DrawStroke[];
@@ -27,7 +27,6 @@ interface Props {
 }
 
 type EditingLabel = { id: string; text: string; x: number; y: number; kind: 'text' | 'frame' };
-type AddingKind = 'text' | 'frame' | null;
 
 const BOOK_NODE_SELECTOR = '.book-node';
 
@@ -265,8 +264,10 @@ export function BookGraph({
   const selectedNodesStartRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const isTouchDevice = useRef(supportsTouchInput());
   const [editingLabel, setEditingLabel] = useState<EditingLabel | null>(null);
-  const [addingKind, setAddingKind] = useState<AddingKind>(null);
-  const [addLabelText, setAddLabelText] = useState('');
+  const [placingKind, setPlacingKind] = useState<'text' | 'frame' | null>(null);
+  const placingKindRef = useRef<'text' | 'frame' | null>(null);
+  const placeDragStartRef2 = useRef<{ sx: number; sy: number } | null>(null);
+  const [placeDragBox, setPlaceDragBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [bulkCategory, setBulkCategory] = useState('');
   const [isDrawMode, setIsDrawMode] = useState(false);
@@ -469,27 +470,60 @@ export function BookGraph({
   }, [onAddDrawStroke, scheduleDrawRedraw]);
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // ── Text label / frame handlers ──────────────────────────────────────────────
-  const handleConfirmAddLabel = useCallback(() => {
-    const text = addLabelText.trim();
-    if (!text || !addingKind) return;
+  // ── Text label / frame placement handlers ───────────────────────────────────
+  useEffect(() => { placingKindRef.current = placingKind; }, [placingKind]);
+
+  const handlePlaceDown = useCallback((clientX: number, clientY: number, rect: DOMRect) => {
+    placeDragStartRef2.current = { sx: clientX - rect.left, sy: clientY - rect.top };
+    setPlaceDragBox(null);
+  }, []);
+
+  const handlePlaceMove = useCallback((clientX: number, clientY: number, rect: DOMRect) => {
+    const start = placeDragStartRef2.current;
+    if (!start) return;
+    const ex = clientX - rect.left;
+    const ey = clientY - rect.top;
+    setPlaceDragBox({
+      x: Math.min(start.sx, ex),
+      y: Math.min(start.sy, ey),
+      w: Math.abs(ex - start.sx),
+      h: Math.abs(ey - start.sy),
+    });
+  }, []);
+
+  const handlePlaceUp = useCallback((clientX: number, clientY: number, rect: DOMRect) => {
+    const start = placeDragStartRef2.current;
+    placeDragStartRef2.current = null;
+    setPlaceDragBox(null);
+    const kind = placingKindRef.current;
+    if (!start || !kind) return;
+    const ex = clientX - rect.left;
+    const ey = clientY - rect.top;
+    if (Math.abs(ex - start.sx) < 20 || Math.abs(ey - start.sy) < 20) return;
     const cy = cyRef.current;
+    if (!cy) return;
+    const pan = cy.pan();
+    const z = cy.zoom();
+    const sx1 = Math.min(start.sx, ex), sy1 = Math.min(start.sy, ey);
+    const sx2 = Math.max(start.sx, ex), sy2 = Math.max(start.sy, ey);
+    const mx1 = (sx1 - pan.x) / z, my1 = (sy1 - pan.y) / z;
+    const mx2 = (sx2 - pan.x) / z, my2 = (sy2 - pan.y) / z;
+    const cx = (mx1 + mx2) / 2, cyCoord = (my1 + my2) / 2;
+    const w = mx2 - mx1, h = my2 - my1;
     const id = `label_${Date.now()}`;
-    if (cy) {
-      const pan = cy.pan();
-      const zoom = cy.zoom();
-      const x = (cy.width() / 2 - pan.x) / zoom;
-      const y = (cy.height() / 2 - pan.y) / zoom;
-      const classes = `annotation-node ${addingKind === 'frame' ? 'frame-node' : 'text-label-node'}`;
-      cy.add({ data: { id, text, kind: addingKind }, position: { x, y }, classes });
-      const positions = loadPositions();
-      positions[id] = { x, y };
-      savePositions(positions);
+    const nodeData: Record<string, unknown> = { id, text: '', kind, w, h };
+    if (kind === 'text') nodeData.textMaxWidth = Math.max(40, w - 16);
+    const classes = `annotation-node ${kind === 'frame' ? 'frame-node' : 'text-label-node'}`;
+    cy.add({ data: nodeData, position: { x: cx, y: cyCoord }, classes });
+    const positions = loadPositions();
+    positions[id] = { x: cx, y: cyCoord };
+    savePositions(positions);
+    onAddTextLabel(id, '', kind, w, h);
+    setPlacingKind(null);
+    if (kind === 'text') {
+      setEditingLabel({ id, text: '', kind, x: (sx1 + sx2) / 2, y: (sy1 + sy2) / 2 });
     }
-    onAddTextLabel(id, text, addingKind);
-    setAddLabelText('');
-    setAddingKind(null);
-  }, [addLabelText, addingKind, onAddTextLabel]);
+  }, [onAddTextLabel]);
 
   const handleSaveEditingLabel = useCallback(() => {
     if (!editingLabel) return;
@@ -805,6 +839,14 @@ export function BookGraph({
           selector: 'node.annotation-node:selected',
           style: { 'border-color': '#3B82F6', 'border-width': 2 },
         },
+        {
+          selector: 'node.text-label-node[w]',
+          style: { width: 'data(w)', height: 'data(h)', 'text-max-width': 'data(textMaxWidth)' },
+        },
+        {
+          selector: 'node.frame-node[w]',
+          style: { width: 'data(w)', height: 'data(h)' },
+        },
       ],
       layout: { name: 'preset' },
       boxSelectionEnabled: false,
@@ -1037,14 +1079,26 @@ export function BookGraph({
     const saved = loadPositions();
     for (const label of textLabels) {
       if (existingIds.has(label.id)) {
-        cy.getElementById(label.id).data('text', label.text);
+        const node = cy.getElementById(label.id);
+        node.data('text', label.text);
+        if (label.w !== undefined) {
+          node.data('w', label.w);
+          node.data('h', label.h);
+          if (label.kind === 'text') node.data('textMaxWidth', Math.max(40, label.w - 16));
+        }
       } else {
         const pos = saved[label.id] ?? (() => {
           const pan = cy.pan(); const zoom = cy.zoom();
           return { x: (cy.width() / 2 - pan.x) / zoom, y: (cy.height() / 2 - pan.y) / zoom };
         })();
+        const nodeData: Record<string, unknown> = { id: label.id, text: label.text, kind: label.kind };
+        if (label.w !== undefined) {
+          nodeData.w = label.w;
+          nodeData.h = label.h;
+          if (label.kind === 'text') nodeData.textMaxWidth = Math.max(40, label.w - 16);
+        }
         const classes = `annotation-node ${label.kind === 'frame' ? 'frame-node' : 'text-label-node'}`;
-        cy.add({ data: { id: label.id, text: label.text, kind: label.kind }, position: pos, classes });
+        cy.add({ data: nodeData, position: pos, classes });
       }
     }
   }, [textLabels]);
@@ -1127,10 +1181,40 @@ export function BookGraph({
         </div>
       )}
 
+      {/* Placement overlay: drag to define shape bounds */}
+      {placingKind && !isDrawMode && (
+        <div
+          style={{ position: 'absolute', inset: 0, zIndex: 8, cursor: 'crosshair', touchAction: 'none' }}
+          onMouseDown={(e) => handlePlaceDown(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect())}
+          onMouseMove={(e) => { if (placeDragStartRef2.current) handlePlaceMove(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect()); }}
+          onMouseUp={(e) => handlePlaceUp(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect())}
+          onTouchStart={(e) => { e.preventDefault(); const t = e.touches[0]; handlePlaceDown(t.clientX, t.clientY, e.currentTarget.getBoundingClientRect()); }}
+          onTouchMove={(e) => { e.preventDefault(); const t = e.touches[0]; handlePlaceMove(t.clientX, t.clientY, e.currentTarget.getBoundingClientRect()); }}
+          onTouchEnd={(e) => { e.preventDefault(); const t = e.changedTouches[0]; handlePlaceUp(t.clientX, t.clientY, e.currentTarget.getBoundingClientRect()); }}
+          onTouchCancel={() => { placeDragStartRef2.current = null; setPlaceDragBox(null); }}
+        />
+      )}
+
+      {/* Placement preview */}
+      {placeDragBox && placeDragBox.w > 4 && (
+        <div style={{
+          position: 'absolute',
+          left: placeDragBox.x,
+          top: placeDragBox.y,
+          width: placeDragBox.w,
+          height: placeDragBox.h,
+          border: `1.5px dashed ${placingKind === 'frame' ? '#60A5FA' : '#A78BFA'}`,
+          background: placingKind === 'frame' ? 'rgba(30,41,59,0.25)' : 'rgba(15,23,42,0.35)',
+          borderRadius: 4,
+          pointerEvents: 'none',
+          zIndex: 9,
+        }} />
+      )}
+
       {/* Annotation buttons */}
       <div className="annotation-btns">
-        <button className={`annotation-btn${addingKind === 'text' ? ' active' : ''}`} onClick={() => { setAddingKind((k) => k === 'text' ? null : 'text'); setAddLabelText(''); }} title="テキストをキャンバスに追加">📝 テキスト</button>
-        <button className={`annotation-btn${addingKind === 'frame' ? ' active' : ''}`} onClick={() => { setAddingKind((k) => k === 'frame' ? null : 'frame'); setAddLabelText(''); }} title="四角い枠をキャンバスに追加">⬜ 枠</button>
+        <button className={`annotation-btn${placingKind === 'text' ? ' active' : ''}`} onClick={() => setPlacingKind((k) => k === 'text' ? null : 'text')} title="ドラッグしてテキストを追加">📝 テキスト</button>
+        <button className={`annotation-btn${placingKind === 'frame' ? ' active' : ''}`} onClick={() => setPlacingKind((k) => k === 'frame' ? null : 'frame')} title="ドラッグして枠を追加">⬜ 枠</button>
         <button className={`annotation-btn${isDrawMode ? ' active' : ''}`} onClick={() => { setIsDrawMode((p) => !p); setIsEraserMode(false); }} title="自由描画">✏️ 描画</button>
       </div>
 
@@ -1161,30 +1245,6 @@ export function BookGraph({
         </div>
       )}
 
-      {/* Add annotation panel */}
-      {addingKind && (
-        <div className="annotation-add-panel">
-          <div className="annotation-add-hint">
-            {addingKind === 'frame' ? '枠のタイトル（省略可）' : 'テキストを入力'}
-          </div>
-          <textarea
-            className="annotation-textarea"
-            autoFocus
-            placeholder={addingKind === 'frame' ? 'タイトル…' : 'テキスト…'}
-            value={addLabelText}
-            onChange={(e) => setAddLabelText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') { setAddingKind(null); setAddLabelText(''); }
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleConfirmAddLabel(); }
-            }}
-            rows={addingKind === 'text' ? 3 : 1}
-          />
-          <div className="annotation-add-actions">
-            <button className="btn-primary" onClick={handleConfirmAddLabel} disabled={addingKind === 'text' && !addLabelText.trim()}>追加</button>
-            <button className="annotation-cancel-btn" onClick={() => { setAddingKind(null); setAddLabelText(''); }}>キャンセル</button>
-          </div>
-        </div>
-      )}
 
       {/* Edit annotation panel */}
       {editingLabel && (
