@@ -257,7 +257,7 @@ export function BookGraph({
       const next = !prev;
       const cy = cyRef.current;
       if (cy) {
-        cy.panningEnabled(!next);
+        cy.userPanningEnabled(!next);
         cy.boxSelectionEnabled(next);
         if (!next) cy.elements().unselect();
       }
