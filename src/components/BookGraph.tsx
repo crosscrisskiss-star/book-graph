@@ -339,28 +339,45 @@ export function BookGraph({
 
     // Touch-based box selection (iPad / touch devices)
     const handleTouchStart = (e: TouchEvent) => {
-      if (!isSelectModeRef.current || e.touches.length !== 1) return;
+      if (!isSelectModeRef.current) return;
+
+      // 2-finger touch: cancel any in-progress box selection and let Cytoscape
+      // handle the pinch-zoom / two-finger pan normally
+      if (e.touches.length === 2) {
+        if (dragStartRef.current) {
+          dragStartRef.current = null;
+          dragBoxRef.current = null;
+          setDragBox(null);
+        }
+        return;
+      }
+
+      if (e.touches.length !== 1) return;
       const cyInst = cyRef.current;
       if (!cyInst) return;
       const touch = e.touches[0];
       const rect = container.getBoundingClientRect();
       const x = touch.clientX - rect.left;
       const y = touch.clientY - rect.top;
-      // If touching a node, let Cytoscape handle it (node drag)
       const onNode = cyInst.nodes(BOOK_NODE_SELECTOR).some((node) => {
         const bb = node.renderedBoundingBox();
         return x >= bb.x1 && x <= bb.x2 && y >= bb.y1 && y <= bb.y2;
       });
       if (onNode) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
+
+      // Do NOT preventDefault/stopImmediatePropagation here.
+      // Cytoscape must see this touchstart so it can track both fingers
+      // when a second finger is added (pinch-zoom).
       dragStartRef.current = { x, y };
       dragBoxRef.current = { x, y, w: 0, h: 0 };
-      setDragBox({ x, y, w: 0, h: 0 });
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!dragStartRef.current || e.touches.length !== 1) return;
+      // 2-finger move: always pass through for pinch-zoom / two-finger pan
+      if (e.touches.length !== 1) return;
+      if (!dragStartRef.current) return;
+      // Single-finger drag: intercept here (not on touchstart) so Cytoscape
+      // already has the first touchstart recorded for multi-finger tracking
       e.preventDefault();
       e.stopImmediatePropagation();
       const touch = e.touches[0];
@@ -378,8 +395,10 @@ export function BookGraph({
       setDragBox({ ...box });
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e: TouchEvent) => {
       if (!dragStartRef.current) return;
+      // Prevent Cytoscape from firing a background tap (which would deselect)
+      e.stopImmediatePropagation();
       dragStartRef.current = null;
       const box = dragBoxRef.current;
       dragBoxRef.current = null;
