@@ -35,10 +35,21 @@ export interface Relationship {
   label?: string;
 }
 
+export type PositionEntry = { x: number; y: number };
+export type PositionSyncMap = Record<string, PositionEntry>;
+
+export interface FavoriteSyncItem {
+  id: string;
+  name: string;
+  positions: PositionSyncMap;
+}
+
 export interface GraphData {
   books: Book[];
   relationships: Relationship[];
   categories?: string[];
+  positions?: PositionSyncMap;
+  favorites?: FavoriteSyncItem[];
 }
 
 export const REL_COLORS: Record<RelationshipType, string> = {

@@ -1,10 +1,7 @@
 import type { PositionMap } from './positions';
+import type { FavoriteSyncItem } from '../types';
 
-export interface FavoriteLayout {
-  id: string;
-  name: string;
-  positions: PositionMap;
-}
+export type FavoriteLayout = FavoriteSyncItem & { positions: PositionMap };
 
 const KEY = 'book-graph-favorites';
 
